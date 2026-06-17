@@ -1,0 +1,42 @@
+use crate::stats::Stats;
+
+#[derive(Debug)]
+pub enum Class {
+    Knight,
+    Mage,
+    Rogue,
+}
+
+impl Class {
+    pub fn base_stats(&self) -> Stats {
+        match self {
+            Class::Knight => Stats {
+                vigor: 14,
+                intelligence: 9,
+                faith: 9,
+                dexterity: 13,
+                arcane: 7,
+                mind: 9,
+                strength: 14,
+            },
+            Class::Mage => Stats {
+                vigor: 9,
+                intelligence: 20,
+                faith: 7,
+                dexterity: 12,
+                arcane: 9,
+                mind: 14,
+                strength: 5,
+            },
+            Class::Rogue => Stats {
+                vigor: 10,
+                intelligence: 11,
+                faith: 8,
+                dexterity: 20,
+                arcane: 11,
+                mind: 11,
+                strength: 10,
+            },
+        }
+    }
+}
