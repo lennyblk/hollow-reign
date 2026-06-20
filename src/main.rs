@@ -1,4 +1,6 @@
 mod class;
+mod combat;
+mod enemy;
 mod equipment;
 mod item;
 mod player;

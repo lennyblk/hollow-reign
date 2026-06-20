@@ -4,6 +4,9 @@ use crate::item::Item;
 use crate::stats::Stats;
 use crate::status::{ElementalEffect, FrostEffect, Status};
 
+// FrostEffect réutilisé pour lightning — même logique de stacks sans tick dmg.
+type LightningEffect = FrostEffect;
+
 const INVENTORY_MAX: usize = 20;
 
 pub struct DroppedSouls {
@@ -28,6 +31,8 @@ pub struct Player {
     pub bleed: ElementalEffect,
     pub rot: ElementalEffect,
     pub frost: FrostEffect,
+    pub fire: ElementalEffect,
+    pub lightning: LightningEffect,
 }
 
 impl Player {
@@ -49,6 +54,8 @@ impl Player {
             bleed: ElementalEffect::new(),
             rot: ElementalEffect::new(),
             frost: FrostEffect::new(),
+            fire: ElementalEffect::new(),
+            lightning: FrostEffect::new(),
         }
     }
 

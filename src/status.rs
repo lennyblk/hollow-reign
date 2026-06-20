@@ -1,6 +1,7 @@
 const STACK_THRESHOLD: u32 = 3;
 const TICK_DURATION: u32 = 3;
 const FROZEN_DURATION: u32 = 3;
+const ELECTROCUTED_DURATION: u32 = 3;
 
 /// Effet élémentaire (poison, bleed, rot) — stacks + tick dégâts.
 pub struct ElementalEffect {
@@ -64,6 +65,7 @@ pub enum Status {
     Dead,
     Sleeping,
     Frozen { turns_remaining: u32 },
+    Electrocuted { turns_remaining: u32 },
 }
 
 impl Default for Status {
@@ -75,7 +77,10 @@ impl Default for Status {
 impl Status {
     pub fn can_act(&self) -> bool {
         match self {
-            Status::Frozen { .. } | Status::Dead | Status::Sleeping => false,
+            Status::Frozen { .. }
+            | Status::Electrocuted { .. }
+            | Status::Dead
+            | Status::Sleeping => false,
             _ => true,
         }
     }
@@ -85,14 +90,22 @@ impl Status {
         *self = Status::Frozen { turns_remaining: FROZEN_DURATION };
     }
 
-    /// Avance d'un tour — décrémente le freeze.
+    /// Déclenche l'électrocution (appelé quand LightningEffect atteint 3 stacks).
+    pub fn apply_electrocute(&mut self) {
+        *self = Status::Electrocuted { turns_remaining: ELECTROCUTED_DURATION };
+    }
+
+    /// Avance d'un tour — décrémente les statuts temporaires.
     pub fn tick(&mut self) {
-        if let Status::Frozen { turns_remaining } = self {
-            if *turns_remaining <= 1 {
-                *self = Status::Alive;
-            } else {
-                *turns_remaining -= 1;
+        match self {
+            Status::Frozen { turns_remaining } | Status::Electrocuted { turns_remaining } => {
+                if *turns_remaining <= 1 {
+                    *self = Status::Alive;
+                } else {
+                    *turns_remaining -= 1;
+                }
             }
+            _ => {}
         }
     }
 }
