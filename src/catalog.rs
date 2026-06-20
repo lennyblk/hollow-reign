@@ -5,43 +5,341 @@ use crate::item::{
 // ─── WEAPONS ────────────────────────────────────────────────────────────────
 
 pub fn worn_shortsword() -> Item {
-    Item::Weapon(WeaponData { name: "Worn Shortsword".into(), base_damage: 18, scaling: StatScaling::Dexterity, two_handed: false, ascii: "" })
+    Item::Weapon(WeaponData {
+        name: "Worn Shortsword".into(),
+        base_damage: 18,
+        scaling: StatScaling::Dexterity,
+        two_handed: false,
+        ascii: r#"
+                             ▓▓▓
+                            ▓▓▒
+                          ▒▓▓▒
+                         ▓▓▓▒
+                       ░▓▓▓▒
+                      ▒▓▓▓▒
+                     ▓▓▓▓░
+                   ░▓▓▓▓░
+                  ▓▓▓▓▓░
+             ░░ ░▓▓▓▓▓░
+             ░▓▓▓▓▓▓▓▒░░░
+               ▓▓▓████▓░
+              ▓▓▓▓░
+             ▓▓▓▓░
+           ▒▓▓▓▓
+          ▒▓▓▓▓
+         ▓▒▓▓░
+       ░▒▓▓▓▒
+      ░▓██▓▒░
+        ░░░
+"#,
+    })
 }
 
 pub fn hunters_blade() -> Item {
-    Item::Weapon(WeaponData { name: "Hunter's Blade".into(), base_damage: 26, scaling: StatScaling::Dexterity, two_handed: false, ascii: "" })
+    Item::Weapon(WeaponData {
+        name: "Hunter's Blade".into(),
+        base_damage: 26,
+        scaling: StatScaling::Dexterity,
+        two_handed: false,
+        ascii: r#"
+           ▒▓
+          ▒▒▒▒▒▓▓▓▒▒▒
+              ▒▓▓▓▒▒▓▓▒
+                ▓███▓▒▓▓▓
+                  ▓████▒▓▓▒
+  ▒▓█▓▒            ▓████▓▓█▒
+    ▓▒ ▒▒           ▒████▒▓▒
+     ▓▒▓▒▒▒     ▒▓▒  ▓▓▓▓▒▓█▓
+      ▓▓▒      ▓▒█▓▓    ▓▒▒▓█▓
+       ▒▒  ▒▒▓█▓▓ ▓▒     ▓▒▓▒▓▓▒
+       ▓▓██▓▓▒▓          ▓▓▒▒ ▓▓▒
+    ▓███████▓             ▓█▓▒▓▓ ▒
+        ▓▒▒▓█▒            ▓█████▓█▓▓
+        ▓▓▒ ▒█           ▓▓ ████▓ ▒
+         ▓█▓▒▒▒     ▒  ▓▓█▓█▒ ▒▒
+           ▓█▓▓▒▒   ▓▓▒▓▓     ▓▒▓
+            ▓█▒▓███▓ ▓▓     ▓▓▒▓▒▓
+             ▓▓▓███▓          ▒▓▒▓▓
+              ▓▓▒███▓▒           ▒▓▓▒
+               ▓▓█▓▓▓█▓▒
+                  ▓▓▓▓▓▓▒▒▒
+                       ▓▒▒▓▓
+"#,
+    })
 }
 
 pub fn silverwind_rapier() -> Item {
-    Item::Weapon(WeaponData { name: "Silverwind Rapier".into(), base_damage: 32, scaling: StatScaling::Dexterity, two_handed: false, ascii: "" })
+    Item::Weapon(WeaponData {
+        name: "Silverwind Rapier".into(),
+        base_damage: 32,
+        scaling: StatScaling::Dexterity,
+        two_handed: false,
+        ascii: r#"
+                                     ▓▒
+                                    ▓▒▒
+                                   ▒▒▒
+                                  ▒▒▒
+                                 ▒▒▒
+                                ▒▒▓
+                               ▒▒▒
+                              ▒▒▓
+                             ▒▒▓
+                            ▒▒▓
+                           ▒▒▓
+                         ▓▒▒
+                        ▒▒▒
+                       ▒▒▒
+                      ▒▒▒
+                     ▒▒▒
+                    ▒▒▒
+                ▓▓▓▓▓▓
+             ▓▓▓▓▓▓▓▓▓▓
+              ▓█ ▓▓▓▓▓▓▓▓
+              ▓ ▓▓█
+              ▓▓▓█
+              ▓▒▓
+"#,
+    })
 }
 
 pub fn ashfall_katana() -> Item {
-    Item::Weapon(WeaponData { name: "Ashfall Katana".into(), base_damage: 38, scaling: StatScaling::Dexterity, two_handed: true, ascii: "" })
+    Item::Weapon(WeaponData {
+        name: "Ashfall Katana".into(),
+        base_damage: 38,
+        scaling: StatScaling::Dexterity,
+        two_handed: true,
+        ascii: r#"
+                                            ░░░
+                                           ░▓▒▒
+                                          ░▒▒░
+                               ░░░       ░▒▒░
+                              ░██▒░     ░▒▒░
+                             ▓██▒      ░▒▒░
+                           ░▓█▓░      ▒▒░░
+                          ░███▒    ░░▓▒░░
+                        ░▒███▓▒▒▒▒▓▓██▓░
+                        ▒█▓░▒█▓░  ░▒▒░░░
+                      ░▓█▓░ ░▒   ░▒░
+                     ░▓█▓░      ░▒░
+                    ░▓█▒░      ░░░
+                   ▒▓█▒      ░░░
+                  ▒█▓▒      ░░░
+                 ▒█▓▒     ░░░
+                ▒█▓▒     ░░░
+               ▒█▓▒     ░░░
+              ▒█▓▒    ░▒░
+             ▒█▓▒   ░░░
+            ▒█▓░   ░░░
+          ░▒██░  ░▒░
+         ░▒█▓▒ ░░▒░
+         ░█▓▒░░▒░
+            ░▒▒
+          ░░░░
+"#,
+    })
 }
 
 pub fn dawnbreaker() -> Item {
-    Item::Weapon(WeaponData { name: "Dawnbreaker".into(), base_damage: 48, scaling: StatScaling::Dexterity, two_handed: false, ascii: "" })
+    Item::Weapon(WeaponData {
+        name: "Dawnbreaker".into(),
+        base_damage: 48,
+        scaling: StatScaling::Dexterity,
+        two_handed: false,
+        ascii: r#"
+                                            ░
+                                            ▒
+                                          ░░░
+                                         ░░░
+                                     ▒░░░░░
+                                  ░▓▓▒░░░
+                                ░▓▓▓░ ░
+                               ░▓▓▒  ░
+                             ░▒▓▓░░
+                     ▒░    ▒▓▒░░
+                   ▒█░░░▒▓▒░░░
+                   ██▓▓▓░ ░░
+                   ▓▓▓▓▓▒░░
+                  ▓██▓▒░
+                ▒▓   ▓▓█
+              ▒▓    ░█▓
+            ░▓░    ░▓░
+          ░▒▓
+        ░██▓
+       ░▓██░
+     ░▓██▓  ░▒
+   ▒██████▓░
+"#,
+    })
 }
 
 pub fn ironwood_club() -> Item {
-    Item::Weapon(WeaponData { name: "Ironwood Club".into(), base_damage: 22, scaling: StatScaling::Strength, two_handed: true, ascii: "" })
+    Item::Weapon(WeaponData {
+        name: "Ironwood Club".into(),
+        base_damage: 22,
+        scaling: StatScaling::Strength,
+        two_handed: true,
+        ascii: r#"
+  ▒█▓░
+ ░▓███▒
+   ░▓███░
+     ▒▓██▓░
+      ░▒▓██▓░
+        ░▒▓▓▓▓░
+          ░▒▓▓▓▒░
+            ░▓▓█▓▒░
+             ░▒▓▓▓▓▒░
+               ░▒▓▓▓▓▒░
+                 ░▓▓▓▓▒░░
+                  ░▒▓▓▒▒▒▓░░▒▒
+                    ░▓▓█▓░▒▓░  ░░░
+                     ░▒▓█▓▒▒▒▓▒░   ░░
+                   ░▒▒░░▓██▓░▒▓▓░░▒░
+                        ░▒████▓░▒▓░  ░▒░
+                      ░▒░  ▒▓██▒▓▓▓▒▓░░
+                          ▒▓▒▒████▓░▒▓░  ░░
+                        ░░    ░▓██▓▒▒▓█▓▒░
+                            ░▒▓░░▓███▓███▓░
+                           ░░    ░▒▓███████░
+                                ▒▒░░▒█████▓░
+                               ░      ▓█▓░
+"#,
+    })
 }
 
 pub fn gravecrusher() -> Item {
-    Item::Weapon(WeaponData { name: "Gravecrusher".into(), base_damage: 42, scaling: StatScaling::Strength, two_handed: true, ascii: "" })
+    Item::Weapon(WeaponData {
+        name: "Gravecrusher".into(),
+        base_damage: 42,
+        scaling: StatScaling::Strength,
+        two_handed: true,
+        ascii: r#"
+                             ███
+                            █▓▓▓▓█
+                           ▓▓▒▓▓▓▓▓██
+                          ▓▓▓▓▓▓▓▓▓▓▓▓█
+                         ▓░░▒▓▓▓▒▓▓▓▓███
+                         ▒░▓▓▒░░▒▒░░▒▒███
+                        ▒▒▓▓▓▒▒▒░▒▓░░▓▓▓▓
+                       ▒▒▒▒▒░▒░░▒░░░░░░▓▓
+                     ░░░▒▒▒░░░▒▒▒▒░░▒▓▓▓
+                    ░░░░▒▒▒▒▒░░░░▒▓▓
+                   ░░░░░▒░░▒░▒▒▒▓▓
+            ▓▓▓▓▓▓░░░░▒▒░░░░▒▓▓
+           ▓▓▓▓▓▓▒░░░░░░░░▒▓▒
+         ▓▓▒▒▓▓▓▓▒▒▒░░░░▒▓
+         ▓▓▓▓▒▒▒▒▓▒░░░▒▓▓
+         ▓▓▓▓▓▒▒▒░░░▓▓▓▓▓
+           ▓▓▓▓▓▓▒░▒▒▓█▓
+           ░░▒▓▓▒▓▓▓▓▓
+         ░░▒▓   ▓▓▓▓
+       ░░▒▓
+    ▓▒░▓▓
+    ▓▒▓▓
+"#,
+    })
 }
 
 pub fn sundermaul() -> Item {
-    Item::Weapon(WeaponData { name: "Sundermaul".into(), base_damage: 62, scaling: StatScaling::Strength, two_handed: true, ascii: "" })
+    Item::Weapon(WeaponData {
+        name: "Sundermaul".into(),
+        base_damage: 62,
+        scaling: StatScaling::Strength,
+        two_handed: true,
+        ascii: r#"
+              ███   ██████
+             █▓▓█████▓▓█▓▒▓▓
+       ████████████▓▓▓▓▓▓▓░░▓
+     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█▓▓▓▓█▒▒▒▓
+    ▓▓█▓▓▒░░▓▓▓▓▓▓▓█▓▓▓██▓▓▓██
+    █████▓▓▒▒██▓▓▓███▓████████
+    ▓████▓▓▒▒▓█████████████▓██
+     ▓███▓▓▓▓███████████████
+     █▓██▓▓████████████
+       ██████████████
+                ██████
+                 ▓▓▓██
+                 ▓▓▓██
+                  ▓▓▓█
+                  █████
+                  ▓▓▓██
+                  ▓▓▓██
+                   ▓▓▓██
+                   ▓▓▓██
+                   ▓▓▓██
+                    ▓▓██
+                    █▓▓██
+                    █▓▓██
+                     █▓██
+                     █▓█▓█
+                     ▓▓▓███
+                      ███
+"#,
+    })
 }
 
 pub fn voidstaff() -> Item {
-    Item::Weapon(WeaponData { name: "Voidstaff".into(), base_damage: 24, scaling: StatScaling::MindAndFaith, two_handed: false, ascii: "" })
+    Item::Weapon(WeaponData {
+        name: "Voidstaff".into(),
+        base_damage: 24,
+        scaling: StatScaling::MindAndFaith,
+        two_handed: false,
+        ascii: r#"
+          ▓
+
+         ▓
+
+            ▒      ▒▒▓▓▓
+                ▓▒▒▒▒▓▓█
+             ▒ ▒▒  ▒▓▒█
+          ▒   ▓▒    ▒▓▓
+       ▓▒▓ ▒▒ ▒ ▒▒ ▓█
+       ▒▒▓▒▒  ▒▒▓█▓█
+         ███▓▓██  █▓▓▓█
+                  ▓▓▓▓▓
+                  ██▓███
+                     ██▓▓
+                      ▓▒▒
+
+                         ▒
+                          ▒▒▓▓▓
+                           ▓▓▓▓▓█
+                           █▓▓▓▓▓▓
+                            █▓▓▒▓▓
+                               ▒
+"#,
+    })
 }
 
 pub fn runebreaker() -> Item {
-    Item::Weapon(WeaponData { name: "Runebreaker".into(), base_damage: 46, scaling: StatScaling::Intelligence, two_handed: false, ascii: "" })
+    Item::Weapon(WeaponData {
+        name: "Runebreaker".into(),
+        base_damage: 46,
+        scaling: StatScaling::Intelligence,
+        two_handed: false,
+        ascii: r#"
+                   █▓
+                     ▒▓███▓
+                       ▓██ ▓▓
+                       ████████
+                      ▒███▒▓▓▓████
+                      ███▓▒   ▒████
+                     ▓██         ▓███
+                    ▒█▓▒          ▒▓█
+                   ▓█▓             ▓█▓
+                  ▓▓                ▓█
+                 ▓▓                 ▒▓
+               ▓█▒                  ▒▓
+              ▓▓▓                   ▒
+             ▓█
+           ▓█▓
+          ▓▓▓
+         ▓█▒          ▒▒▓▒
+       ▓▓▓
+      ▓▓▓
+     ▓█▒
+    ▓▓▓
+"#,
+    })
 }
 
 // ─── ARMORS ─────────────────────────────────────────────────────────────────
