@@ -33,6 +33,8 @@ pub struct Player {
     pub frost: FrostEffect,
     pub fire: ElementalEffect,
     pub lightning: LightningEffect,
+    pub estus_charges: u32,
+    pub last_grace: Option<u32>,
 }
 
 impl Player {
@@ -56,7 +58,53 @@ impl Player {
             frost: FrostEffect::new(),
             fire: ElementalEffect::new(),
             lightning: FrostEffect::new(),
+            estus_charges: 1,
+            last_grace: None,
         }
+    }
+
+    /// Nombre max de fioles selon le niveau.
+    pub fn max_estus(&self) -> u32 {
+        match self.level {
+            1..=9   => 1,
+            10..=19 => 2,
+            20..=34 => 3,
+            35..=49 => 4,
+            50..=69 => 5,
+            70..=98 => 6,
+            _       => 7,
+        }
+    }
+
+    /// Utilise une fiole d'estus. Retourne false si plus de charges.
+    pub fn use_estus(&mut self) -> bool {
+        if self.estus_charges == 0 {
+            return false;
+        }
+        self.estus_charges -= 1;
+        let heal = self.stats.max_hp() / 2;
+        self.hp = (self.hp + heal).min(self.stats.max_hp());
+        true
+    }
+
+    /// S'asseoir à une grâce — reset estus, sauvegarde la grâce, ennemis respawn géré par la map.
+    pub fn rest_at_grace(&mut self, grace_id: u32) {
+        self.last_grace = Some(grace_id);
+        self.estus_charges = self.max_estus();
+        self.status = Status::default();
+    }
+
+    /// Respawn à la dernière grâce après une mort. La position est mise à jour par la map.
+    pub fn respawn_at_grace(&mut self) {
+        self.hp = self.stats.max_hp();
+        self.status = Status::default();
+        self.estus_charges = self.max_estus();
+        self.poison = ElementalEffect::new();
+        self.bleed = ElementalEffect::new();
+        self.rot = ElementalEffect::new();
+        self.frost = FrostEffect::new();
+        self.fire = ElementalEffect::new();
+        self.lightning = FrostEffect::new();
     }
 
     pub fn take_damage(&mut self, amount: u32) {

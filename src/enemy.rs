@@ -23,6 +23,7 @@ pub struct Enemy {
     pub defense: u32,
     pub elements: Vec<Element>,
     pub soul_drop: u32,
+    pub ascii: &'static str,
 }
 
 impl Enemy {
@@ -34,6 +35,7 @@ impl Enemy {
         defense: u32,
         elements: Vec<Element>,
         soul_drop: u32,
+        ascii: &'static str,
     ) -> Self {
         Enemy {
             name,
@@ -44,6 +46,7 @@ impl Enemy {
             defense,
             elements,
             soul_drop,
+            ascii,
         }
     }
 
@@ -53,6 +56,18 @@ impl Enemy {
 
     pub fn is_alive(&self) -> bool {
         self.hp > 0
+    }
+
+    /// Les boss meurent définitivement. Les autres respawn à la grace.
+    pub fn can_respawn(&self) -> bool {
+        !matches!(self.enemy_type, EnemyType::Boss)
+    }
+
+    /// Remet l'ennemi à pleine vie. Ne fait rien pour les boss.
+    pub fn respawn(&mut self) {
+        if self.can_respawn() {
+            self.hp = self.max_hp;
+        }
     }
 
     /// Retourne les dégâts réellement subis après réduction par la defense.

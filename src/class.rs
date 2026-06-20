@@ -8,6 +8,32 @@ pub enum Class {
 }
 
 impl Class {
+    pub fn ascii(&self) -> &'static str {
+        match self {
+            Class::Knight => "\
+  /||\\\n\
+ /=||=\\\n\
+|=[  ]=|\n\
+|  []  |\n\
+|  ||  |\n\
+ \\====/",
+            Class::Mage => "\
+   /|\\\n\
+  / * \\\n\
+ | ~~~ |\n\
+  \\   /\n\
+   | |\n\
+   |_|",
+            Class::Rogue => "\
+  .---.\n\
+ (`. .`)\n\
+  | ^ |\n\
+  |___|\n\
+  /| |\\\n\
+ / |_| \\",
+        }
+    }
+
     pub fn base_stats(&self) -> Stats {
         match self {
             Class::Knight => Stats {
