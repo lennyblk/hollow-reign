@@ -12,9 +12,21 @@ pub enum Item {
 }
 
 impl Item {
-    // TODO: retourner le nom de l'item
-    // pub fn name(&self) -> &str { ... }
+    pub fn name(&self) -> &str {
+        match self {
+            Item::Weapon(name) => name,
+            Item::Armor(name) => name,
+            Item::Shield(name) => name,
+            Item::Consumable(name) => name,
+        }
+    }
 
-    // TODO: retourner le slot compatible
-    // pub fn slot(&self) -> Option<EquipmentSlot> { ... }
+    pub fn slot(&self) -> Option<EquipmentSlot> {
+        match self {
+            Item::Weapon(_) => Some(EquipmentSlot::Weapon),
+            Item::Armor(_) => Some(EquipmentSlot::Armor),
+            Item::Shield(_) => Some(EquipmentSlot::Shield),
+            Item::Consumable(_) => None,
+        }
+    }
 }
