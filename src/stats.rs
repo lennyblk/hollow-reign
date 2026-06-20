@@ -29,6 +29,21 @@ impl Stats {
         }
     }
 
+    /// Retourne false si le nom de stat est inconnu.
+    pub fn modify(&mut self, stat: &str, amount: u32) -> bool {
+        match stat {
+            "vigor"        => self.vigor += amount,
+            "intelligence" => self.intelligence += amount,
+            "faith"        => self.faith += amount,
+            "dexterity"    => self.dexterity += amount,
+            "arcane"       => self.arcane += amount,
+            "mind"         => self.mind += amount,
+            "strength"     => self.strength += amount,
+            _              => return false,
+        }
+        true
+    }
+
     // TODO: calculer HP max depuis vigor
     // pub fn max_hp(&self) -> u32 { ... }
 

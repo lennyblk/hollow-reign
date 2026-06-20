@@ -8,6 +8,12 @@ pub enum Status {
     Sleeping,
 }
 
+impl Default for Status {
+    fn default() -> Self {
+        Status::Alive
+    }
+}
+
 impl Status {
     // TODO: vérifier si le joueur peut agir
     // pub fn can_act(&self) -> bool { ... }
