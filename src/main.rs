@@ -13,10 +13,5 @@ use class::Class;
 use player::Player;
 
 fn main() {
-    let player = Player::new(String::from("Bozo"), Class::Knight);
-
-    println!(
-        "Welcome, {} the {:?} — {} hp — vigor {}",
-        player.name, player.class, player.hp, player.stats.vigor
-    );
+    println!("Tout es ok")
 }

@@ -75,6 +75,7 @@ pub struct WeaponAbility {
 
 pub struct WeaponData {
     pub name: String,
+    pub description: &'static str,
     pub base_damage: u32,
     pub scaling: StatScaling,
     pub two_handed: bool,
@@ -85,19 +86,25 @@ pub struct WeaponData {
 
 pub struct ArmorData {
     pub name: String,
+    pub description: &'static str,
     pub defense: u32,
     pub ascii: &'static str,
 }
 
 pub struct ShieldData {
     pub name: String,
+    pub description: &'static str,
     pub defense: u32,
     pub ascii: &'static str,
 }
 
 pub enum ConsumableEffect {
     CurePoison,
+    CureBleed,
+    CureFire,
+    CureRot,
     CureFrost,
+    CureLightning,
     DealDamage(u32),
     DealFireDamage(u32),
     BuffAttack { bonus: u32, turns: u32 },
@@ -106,6 +113,7 @@ pub enum ConsumableEffect {
 
 pub struct ConsumableData {
     pub name: String,
+    pub description: &'static str,
     pub effect: ConsumableEffect,
     pub ascii: &'static str,
 }

@@ -1,6 +1,6 @@
 use crate::class::Class;
 use crate::equipment::Equipment;
-use crate::item::Item;
+use crate::item::{ConsumableEffect, Item};
 use crate::stats::Stats;
 use crate::status::{ElementalEffect, FrostEffect, Status};
 
@@ -149,6 +149,54 @@ impl Player {
     /// Achète n niveaux dans une stat. Retourne le nombre de niveaux réellement achetés.
     pub fn level_up_n(&mut self, stat: &str, n: u32) -> u32 {
         (0..n).take_while(|_| self.level_up(stat)).count() as u32
+    }
+
+    /// Applique un effet de consommable sur le joueur.
+    /// Retourne false si rien à soigner (DoT inactif) ou si l'effet nécessite un contexte de combat.
+    pub fn use_consumable(&mut self, effect: &ConsumableEffect) -> bool {
+        match effect {
+            ConsumableEffect::CurePoison => {
+                if !self.poison.is_ticking() && self.poison.stacks == 0 { return false; }
+                self.poison = ElementalEffect::new();
+                true
+            }
+            ConsumableEffect::CureBleed => {
+                if !self.bleed.is_ticking() && self.bleed.stacks == 0 { return false; }
+                self.bleed = ElementalEffect::new();
+                true
+            }
+            ConsumableEffect::CureFire => {
+                if !self.fire.is_ticking() && self.fire.stacks == 0 { return false; }
+                self.fire = ElementalEffect::new();
+                true
+            }
+            ConsumableEffect::CureRot => {
+                if !self.rot.is_ticking() && self.rot.stacks == 0 { return false; }
+                self.rot = ElementalEffect::new();
+                true
+            }
+            ConsumableEffect::CureFrost => {
+                if self.frost.stacks == 0 && !matches!(self.status, Status::Frozen { .. }) { return false; }
+                self.frost = FrostEffect::new();
+                if matches!(self.status, Status::Frozen { .. }) {
+                    self.status = Status::Alive;
+                }
+                true
+            }
+            ConsumableEffect::CureLightning => {
+                if self.lightning.stacks == 0 && !matches!(self.status, Status::Electrocuted { .. }) { return false; }
+                self.lightning = FrostEffect::new();
+                if matches!(self.status, Status::Electrocuted { .. }) {
+                    self.status = Status::Alive;
+                }
+                true
+            }
+            // Ces effets nécessitent un contexte de combat — géré dans combat.rs
+            ConsumableEffect::DealDamage(_)
+            | ConsumableEffect::DealFireDamage(_)
+            | ConsumableEffect::BuffAttack { .. }
+            | ConsumableEffect::QuestItem => false,
+        }
     }
 
     pub fn die(&mut self) {
