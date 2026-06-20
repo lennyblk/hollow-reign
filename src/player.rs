@@ -2,7 +2,7 @@ use crate::class::Class;
 use crate::equipment::Equipment;
 use crate::item::Item;
 use crate::stats::Stats;
-use crate::status::Status;
+use crate::status::{ElementalEffect, FrostEffect, Status};
 
 const INVENTORY_MAX: usize = 20;
 
@@ -24,6 +24,10 @@ pub struct Player {
     pub equipment: Vec<Equipment>,
     pub position: (f32, f32),
     pub dropped_souls: Option<DroppedSouls>,
+    pub poison: ElementalEffect,
+    pub bleed: ElementalEffect,
+    pub rot: ElementalEffect,
+    pub frost: FrostEffect,
 }
 
 impl Player {
@@ -41,6 +45,10 @@ impl Player {
             equipment: Vec::new(),
             position: (0.0, 0.0),
             dropped_souls: None,
+            poison: ElementalEffect::new(),
+            bleed: ElementalEffect::new(),
+            rot: ElementalEffect::new(),
+            frost: FrostEffect::new(),
         }
     }
 
@@ -59,10 +67,17 @@ impl Player {
         true
     }
 
+    /// Coût pour passer du niveau actuel au suivant.
     pub fn soul_cost(&self) -> u32 {
         10 + self.level * self.level / 5
     }
 
+    /// Coût total pour acheter n niveaux (preview avant confirmation).
+    pub fn total_cost(&self, n: u32) -> u32 {
+        (0..n).map(|i| 10 + (self.level + i) * (self.level + i) / 5).sum()
+    }
+
+    /// Achète 1 niveau dans une stat. Retourne false si souls insuffisants ou stat inconnue.
     pub fn level_up(&mut self, stat: &str) -> bool {
         let cost = self.soul_cost();
         if self.souls < cost {
@@ -74,6 +89,11 @@ impl Player {
         self.souls -= cost;
         self.level += 1;
         true
+    }
+
+    /// Achète n niveaux dans une stat. Retourne le nombre de niveaux réellement achetés.
+    pub fn level_up_n(&mut self, stat: &str, n: u32) -> u32 {
+        (0..n).take_while(|_| self.level_up(stat)).count() as u32
     }
 
     pub fn die(&mut self) {

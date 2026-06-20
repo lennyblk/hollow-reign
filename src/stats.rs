@@ -29,24 +29,47 @@ impl Stats {
         }
     }
 
-    /// Retourne false si le nom de stat est inconnu.
+    pub fn get(&self, stat: &str) -> Option<u32> {
+        match stat {
+            "vigor" => Some(self.vigor),
+            "intelligence" => Some(self.intelligence),
+            "faith" => Some(self.faith),
+            "dexterity" => Some(self.dexterity),
+            "arcane" => Some(self.arcane),
+            "mind" => Some(self.mind),
+            "strength" => Some(self.strength),
+            _ => None,
+        }
+    }
+
+    /// pour afficher le menu grâce.
+    pub fn all(&self) -> [(&str, u32); 7] {
+        [
+            ("vigor", self.vigor),
+            ("intelligence", self.intelligence),
+            ("faith", self.faith),
+            ("dexterity", self.dexterity),
+            ("arcane", self.arcane),
+            ("mind", self.mind),
+            ("strength", self.strength),
+        ]
+    }
+
     pub fn modify(&mut self, stat: &str, amount: u32) -> bool {
         match stat {
-            "vigor"        => self.vigor += amount,
+            "vigor" => self.vigor += amount,
             "intelligence" => self.intelligence += amount,
-            "faith"        => self.faith += amount,
-            "dexterity"    => self.dexterity += amount,
-            "arcane"       => self.arcane += amount,
-            "mind"         => self.mind += amount,
-            "strength"     => self.strength += amount,
-            _              => return false,
+            "faith" => self.faith += amount,
+            "dexterity" => self.dexterity += amount,
+            "arcane" => self.arcane += amount,
+            "mind" => self.mind += amount,
+            "strength" => self.strength += amount,
+            _ => return false,
         }
         true
     }
 
-    // TODO: calculer HP max depuis vigor
-    // pub fn max_hp(&self) -> u32 { ... }
-
-    // TODO: calculer stamina max depuis mind
-    // pub fn max_stamina(&self) -> u32 { ... }
+    pub fn max_hp(&self) -> u32 {
+        300 + self.vigor * 10
+    }
 }
