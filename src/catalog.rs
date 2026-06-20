@@ -1,5 +1,6 @@
 use crate::item::{
-    ArmorData, ConsumableData, ConsumableEffect, Item, ShieldData, StatScaling, WeaponData,
+    ArmorData, ConsumableData, ConsumableEffect, Element, Item, ShieldData, StatScaling,
+    WeaponAbility, WeaponData, WeaponEffect,
 };
 
 // ─── WEAPONS ────────────────────────────────────────────────────────────────
@@ -9,7 +10,8 @@ pub fn worn_shortsword() -> Item {
         name: "Worn Shortsword".into(),
         base_damage: 18,
         scaling: StatScaling::Dexterity,
-        two_handed: false,
+        two_handed: false, element: Element::Bleed,
+        ability: WeaponAbility { name: "Lacerate", effect: WeaponEffect::AoeElemental },
         ascii: r#"
                              ▓▓▓
                             ▓▓▒
@@ -40,7 +42,8 @@ pub fn hunters_blade() -> Item {
         name: "Hunter's Blade".into(),
         base_damage: 26,
         scaling: StatScaling::Dexterity,
-        two_handed: false,
+        two_handed: false, element: Element::Bleed,
+        ability: WeaponAbility { name: "Blood Feast", effect: WeaponEffect::Lifesteal { percent: 25 } },
         ascii: r#"
            ▒▓
           ▒▒▒▒▒▓▓▓▒▒▒
@@ -73,7 +76,8 @@ pub fn silverwind_rapier() -> Item {
         name: "Silverwind Rapier".into(),
         base_damage: 32,
         scaling: StatScaling::Dexterity,
-        two_handed: false,
+        two_handed: false, element: Element::Ice,
+        ability: WeaponAbility { name: "Flash Freeze", effect: WeaponEffect::InstantStun },
         ascii: r#"
                                      ▓▒
                                     ▓▒▒
@@ -107,7 +111,8 @@ pub fn ashfall_katana() -> Item {
         name: "Ashfall Katana".into(),
         base_damage: 38,
         scaling: StatScaling::Dexterity,
-        two_handed: true,
+        two_handed: true, element: Element::Fire,
+        ability: WeaponAbility { name: "Ember Dance", effect: WeaponEffect::MultiHit { count: 2, damage_percent: 60 } },
         ascii: r#"
                                             ░░░
                                            ░▓▒▒
@@ -144,7 +149,8 @@ pub fn dawnbreaker() -> Item {
         name: "Dawnbreaker".into(),
         base_damage: 48,
         scaling: StatScaling::Dexterity,
-        two_handed: false,
+        two_handed: false, element: Element::Lightning,
+        ability: WeaponAbility { name: "Storm Call", effect: WeaponEffect::AoeElemental },
         ascii: r#"
                                             ░
                                             ▒
@@ -177,7 +183,8 @@ pub fn ironwood_club() -> Item {
         name: "Ironwood Club".into(),
         base_damage: 22,
         scaling: StatScaling::Strength,
-        two_handed: true,
+        two_handed: true, element: Element::Poison,
+        ability: WeaponAbility { name: "Toxic Bludgeon", effect: WeaponEffect::ArmorBreak { reduction_percent: 50, turns: 3 } },
         ascii: r#"
   ▒█▓░
  ░▓███▒
@@ -211,7 +218,8 @@ pub fn gravecrusher() -> Item {
         name: "Gravecrusher".into(),
         base_damage: 42,
         scaling: StatScaling::Strength,
-        two_handed: true,
+        two_handed: true, element: Element::Poison,
+        ability: WeaponAbility { name: "Pestilence", effect: WeaponEffect::AoeElemental },
         ascii: r#"
                              ███
                             █▓▓▓▓█
@@ -244,7 +252,8 @@ pub fn sundermaul() -> Item {
         name: "Sundermaul".into(),
         base_damage: 62,
         scaling: StatScaling::Strength,
-        two_handed: true,
+        two_handed: true, element: Element::Bleed,
+        ability: WeaponAbility { name: "Obliterate", effect: WeaponEffect::Execute { hp_threshold_percent: 25, multiplier: 3 } },
         ascii: r#"
               ███   ██████
              █▓▓█████▓▓█▓▒▓▓
@@ -282,7 +291,8 @@ pub fn voidstaff() -> Item {
         name: "Voidstaff".into(),
         base_damage: 24,
         scaling: StatScaling::MindAndFaith,
-        two_handed: false,
+        two_handed: false, element: Element::Rot,
+        ability: WeaponAbility { name: "Entropy", effect: WeaponEffect::ExtendedRot { extra_turns: 2 } },
         ascii: r#"
           ▓
 
@@ -315,7 +325,8 @@ pub fn runebreaker() -> Item {
         name: "Runebreaker".into(),
         base_damage: 46,
         scaling: StatScaling::Intelligence,
-        two_handed: false,
+        two_handed: false, element: Element::Lightning,
+        ability: WeaponAbility { name: "Arcane Surge", effect: WeaponEffect::EmpoweredStrike { bonus_percent: 100 } },
         ascii: r#"
                    █▓
                      ▒▓███▓

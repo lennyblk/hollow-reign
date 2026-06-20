@@ -66,6 +66,7 @@ pub enum Status {
     Sleeping,
     Frozen { turns_remaining: u32 },
     Electrocuted { turns_remaining: u32 },
+    Stunned { turns_remaining: u32 },
 }
 
 impl Default for Status {
@@ -79,10 +80,15 @@ impl Status {
         match self {
             Status::Frozen { .. }
             | Status::Electrocuted { .. }
+            | Status::Stunned { .. }
             | Status::Dead
             | Status::Sleeping => false,
             _ => true,
         }
+    }
+
+    pub fn apply_stun(&mut self) {
+        *self = Status::Stunned { turns_remaining: 1 };
     }
 
     /// Déclenche le freeze (appelé quand FrostEffect atteint 3 stacks).
@@ -98,7 +104,9 @@ impl Status {
     /// Avance d'un tour — décrémente les statuts temporaires.
     pub fn tick(&mut self) {
         match self {
-            Status::Frozen { turns_remaining } | Status::Electrocuted { turns_remaining } => {
+            Status::Frozen { turns_remaining }
+            | Status::Electrocuted { turns_remaining }
+            | Status::Stunned { turns_remaining } => {
                 if *turns_remaining <= 1 {
                     *self = Status::Alive;
                 } else {
