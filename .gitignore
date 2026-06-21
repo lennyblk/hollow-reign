@@ -1,2 +1,27 @@
+# Rust
 /target
+Cargo.lock
+
+# Editors & IDEs
+.vscode/
+.idea/
+*.iml
+*.suo
+*.user
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Env & secrets
+.env
+.env.*
+*.key
+*.pem
+
+# Private config
 .claude/
