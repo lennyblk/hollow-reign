@@ -17,6 +17,9 @@ Cargo.lock
 Thumbs.db
 desktop.ini
 
+# Save de jeu
+save.json
+
 # Env & secrets
 .env
 .env.*
