@@ -44,6 +44,7 @@ struct SaveData {
     nav_opened_chests: Vec<u32>,
     nav_last_locations:Vec<(String, u32)>,
     nav_killed_bosses: Vec<String>,
+    visited_graces:    Vec<u32>,
     // Quêtes
     active_quests:     Vec<String>,
     completed_quests:  Vec<String>,
@@ -80,6 +81,7 @@ pub fn save(player: &Player, state: &NavigationState) {
         nav_location_id:    state.location_id,
         nav_opened_chests:  state.opened_chests.iter().copied().collect(),
         nav_killed_bosses:  state.killed_bosses.iter().map(|z| zone_to_str(*z).to_string()).collect(),
+        visited_graces:     player.visited_graces.iter().copied().collect(),
         active_quests:      player.active_quests.iter().cloned().collect(),
         completed_quests:   player.completed_quests.iter().cloned().collect(),
         nav_last_locations: state
@@ -124,6 +126,7 @@ pub fn load(world: &World) -> Option<(Player, NavigationState)> {
     player.level    = data.player_level;
     player.estus_charges    = data.player_estus;
     player.last_grace       = data.player_last_grace;
+    player.visited_graces   = data.visited_graces.into_iter().collect();
     player.active_quests    = data.active_quests.into_iter().collect();
     player.completed_quests = data.completed_quests.into_iter().collect();
 

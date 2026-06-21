@@ -8,12 +8,13 @@ use crossterm::{
     terminal::{self, Clear, ClearType},
 };
 
+use crate::map::World;
 use crate::player::Player;
 use crate::stats::Stats;
+use crate::zone::ZoneId;
 
-// ─── DONNÉES STATS ────────────────────────────────────────────────────────────
+// ─── STATS LEVEL-UP ──────────────────────────────────────────────────────────
 
-/// (clé interne, label affiché, description courte)
 const STATS: &[(&str, &str, &str)] = &[
     ("vigor",        "Vigueur",       "Augmente les PV maximum"),
     ("strength",     "Force",         "Augmente les degats physiques"),
@@ -23,8 +24,6 @@ const STATS: &[(&str, &str, &str)] = &[
     ("arcane",       "Arcane",        "Augmente la decouverte d'objets"),
     ("mind",         "Esprit",        "Ameliore la concentration de frappe"),
 ];
-
-// ─── CALCULS PREVIEW ──────────────────────────────────────────────────────────
 
 fn current_atk(stats: &Stats) -> u32 {
     5 + stats.strength + stats.dexterity / 2
@@ -60,145 +59,214 @@ fn stat_preview(player: &Player, key: &str) -> String {
     }
 }
 
-// ─── BOUCLE PRINCIPALE ───────────────────────────────────────────────────────
+// ─── ÉCRAN ───────────────────────────────────────────────────────────────────
 
-pub fn run_grace_menu(player: &mut Player, grace_name: &str) {
+enum Screen {
+    Main,
+    LevelUp,
+    FastTravel,
+}
+
+// ─── POINT D'ENTRÉE ──────────────────────────────────────────────────────────
+
+/// Retourne Some(grace_id) si le joueur choisit un voyage rapide, None sinon.
+pub fn run_grace_menu(
+    player: &mut Player,
+    grace_name: &str,
+    current_grace_id: u32,
+    world: &World,
+) -> Option<u32> {
+    // Liste des grâces accessibles (visitées, hors grâce courante), triées par id
+    let fast_travel: Vec<(u32, &str, ZoneId)> = world
+        .all_graces()
+        .into_iter()
+        .filter(|(id, _, _)| *id != current_grace_id && player.visited_graces.contains(id))
+        .collect();
+
+    let can_fast_travel = !fast_travel.is_empty();
+
     let mut out = io::stdout();
     terminal::enable_raw_mode().ok();
     execute!(out, Hide).ok();
 
-    let mut selected = 0usize;
-    let mut flash: Option<(&str, bool)> = None; // persiste jusqu'au prochain input
+    let mut screen    = Screen::Main;
+    let mut main_sel  = 0usize; // 0 = level up, 1 = fast travel
+    let mut stat_sel  = 0usize;
+    let mut ft_sel    = 0usize;
+    let mut flash: Option<(&str, bool)> = None;
+    let mut result: Option<u32> = None;
 
     loop {
-        draw(&mut out, player, grace_name, selected, flash);
+        match screen {
+            Screen::Main => {
+                draw_main(&mut out, player, grace_name, main_sel, can_fast_travel);
+            }
+            Screen::LevelUp => {
+                draw_level_up(&mut out, player, grace_name, stat_sel, flash);
+            }
+            Screen::FastTravel => {
+                draw_fast_travel(&mut out, grace_name, &fast_travel, ft_sel);
+            }
+        }
 
         if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
-            flash = None; // effacer sur n'importe quel input
-            match code {
-                KeyCode::Up => {
-                    if selected > 0 { selected -= 1; }
-                }
-                KeyCode::Down => {
-                    if selected < STATS.len() - 1 { selected += 1; }
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    let (key, _, _) = STATS[selected];
-                    if player.level_up(key) {
-                        if key == "vigor" { player.hp = player.stats.max_hp(); }
-                        flash = Some(("Amelioration reussie !", true));
-                    } else {
-                        flash = Some(("Ames insuffisantes.", false));
+            flash = None;
+            match screen {
+                Screen::Main => match code {
+                    KeyCode::Up => {
+                        if main_sel > 0 { main_sel -= 1; }
                     }
-                }
-                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => break,
-                _ => {}
+                    KeyCode::Down => {
+                        if main_sel == 0 && can_fast_travel { main_sel = 1; }
+                    }
+                    KeyCode::Enter | KeyCode::Char(' ') => {
+                        if main_sel == 0 {
+                            screen = Screen::LevelUp;
+                        } else if can_fast_travel {
+                            screen = Screen::FastTravel;
+                        }
+                    }
+                    KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => break,
+                    _ => {}
+                },
+                Screen::LevelUp => match code {
+                    KeyCode::Up => {
+                        if stat_sel > 0 { stat_sel -= 1; }
+                    }
+                    KeyCode::Down => {
+                        if stat_sel < STATS.len() - 1 { stat_sel += 1; }
+                    }
+                    KeyCode::Enter | KeyCode::Char(' ') => {
+                        let (key, _, _) = STATS[stat_sel];
+                        if player.level_up(key) {
+                            if key == "vigor" { player.hp = player.stats.max_hp(); }
+                            flash = Some(("Amelioration reussie !", true));
+                        } else {
+                            flash = Some(("Ames insuffisantes.", false));
+                        }
+                    }
+                    KeyCode::Esc => {
+                        screen = Screen::Main;
+                    }
+                    _ => {}
+                },
+                Screen::FastTravel => match code {
+                    KeyCode::Up => {
+                        if ft_sel > 0 { ft_sel -= 1; }
+                    }
+                    KeyCode::Down => {
+                        if ft_sel + 1 < fast_travel.len() { ft_sel += 1; }
+                    }
+                    KeyCode::Enter | KeyCode::Char(' ') => {
+                        result = Some(fast_travel[ft_sel].0);
+                        break;
+                    }
+                    KeyCode::Esc => {
+                        screen = Screen::Main;
+                    }
+                    _ => {}
+                },
             }
         }
     }
 
     execute!(out, Show).ok();
     terminal::disable_raw_mode().ok();
+    result
 }
 
-// ─── RENDU ────────────────────────────────────────────────────────────────────
+// ─── RENDU : ÉCRAN PRINCIPAL ─────────────────────────────────────────────────
 
-fn draw(
-    out:        &mut io::Stdout,
-    player:     &Player,
+fn draw_main(
+    out: &mut io::Stdout,
+    player: &Player,
     grace_name: &str,
-    selected:   usize,
-    flash:      Option<(&str, bool)>,
+    selected: usize,
+    can_fast_travel: bool,
 ) {
-    let (tw, th) = terminal::size().unwrap_or((120, 35));
+    let (tw, _th) = terminal::size().unwrap_or((120, 35));
     execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
 
-    // ── En-tête ───────────────────────────────────────────────────────────────
-    let title = format!("  Grace — {}  ", grace_name);
-    let bar   = "═".repeat((tw as usize).saturating_sub(title.len() + 4));
+    draw_header(out, grace_name, tw);
+    let art_rows = draw_art_and_info(out, player, tw);
+
+    let sc = 48u16;
+    let right_width = (tw as usize).saturating_sub(sc as usize + 2);
+
+    // Titre
     execute!(
         out,
-        SetForegroundColor(Color::DarkYellow),
+        MoveTo(sc, 2),
+        SetForegroundColor(Color::White),
         SetAttribute(Attribute::Bold),
-        Print(format!("══{}{}══\r\n", title, bar)),
+        Print("GRACE"),
+        ResetColor,
+    ).ok();
+    execute!(
+        out,
+        MoveTo(sc, 3),
+        SetForegroundColor(Color::DarkGrey),
+        Print("─".repeat(right_width.min(30))),
         ResetColor,
     ).ok();
 
-    // ── Colonne gauche : ASCII + infos joueur ─────────────────────────────────
-    // art Knight ~43 chars large depuis x=2 → stats à droite à x=48
-    let sc_info = 48u16;
-    let ascii   = player.class.ascii();
-    let mut row = 2u16;
+    let options = [
+        ("Augmenter niveau",  true),
+        ("Voyage rapide",     can_fast_travel),
+    ];
 
-    for line in ascii.lines() {
-        execute!(
-            out,
-            MoveTo(2, row),
-            SetForegroundColor(Color::DarkGrey),
-            Print(line),
-            ResetColor,
-        ).ok();
-        row += 1;
+    for (i, (label, enabled)) in options.iter().enumerate() {
+        let row = 5 + i as u16;
+        if i == selected {
+            execute!(
+                out,
+                MoveTo(sc, row),
+                SetForegroundColor(Color::DarkYellow),
+                SetAttribute(Attribute::Bold),
+                Print(format!("▶ {}", label)),
+                ResetColor,
+            ).ok();
+        } else if *enabled {
+            execute!(
+                out,
+                MoveTo(sc, row),
+                SetForegroundColor(Color::White),
+                Print(format!("  {}", label)),
+                ResetColor,
+            ).ok();
+        } else {
+            execute!(
+                out,
+                MoveTo(sc, row),
+                SetForegroundColor(Color::DarkGrey),
+                Print(format!("  {} (aucune grace visitee)", label)),
+                ResetColor,
+            ).ok();
+        }
     }
 
-    row += 1;
-    execute!(
-        out,
-        MoveTo(2, row),
-        SetForegroundColor(Color::White),
-        SetAttribute(Attribute::Bold),
-        Print(&player.name),
-        ResetColor,
-    ).ok();
-    row += 1;
+    let _ = art_rows;
+    draw_hint(out, tw, "[haut/bas] Choisir    [Entree] Confirmer    [Esc] Fermer");
+    out.flush().ok();
+}
 
-    execute!(
-        out,
-        MoveTo(2, row),
-        SetForegroundColor(Color::DarkYellow),
-        Print(format!("Niveau  {}", player.level)),
-        ResetColor,
-    ).ok();
-    row += 1;
+// ─── RENDU : LEVEL UP ────────────────────────────────────────────────────────
 
-    execute!(
-        out,
-        MoveTo(2, row),
-        SetForegroundColor(Color::White),
-        Print(format!("Ames    {}", player.souls)),
-        ResetColor,
-    ).ok();
-    row += 1;
+fn draw_level_up(
+    out: &mut io::Stdout,
+    player: &Player,
+    grace_name: &str,
+    selected: usize,
+    flash: Option<(&str, bool)>,
+) {
+    let (tw, _th) = terminal::size().unwrap_or((120, 35));
+    execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
 
-    let cost       = player.soul_cost();
-    let can_afford = player.souls >= cost;
-    execute!(
-        out,
-        MoveTo(2, row),
-        SetForegroundColor(if can_afford { Color::Green } else { Color::Red }),
-        Print(format!("Cout    {} ames", cost)),
-        ResetColor,
-    ).ok();
-    row += 2;
+    draw_header(out, grace_name, tw);
+    draw_art_and_info(out, player, tw);
 
-    // PV actuel / max
-    let hp_color = if player.hp * 100 / player.stats.max_hp().max(1) > 60 {
-        Color::Green
-    } else if player.hp * 100 / player.stats.max_hp().max(1) > 30 {
-        Color::Yellow
-    } else {
-        Color::Red
-    };
-    execute!(
-        out,
-        MoveTo(2, row),
-        SetForegroundColor(hp_color),
-        Print(format!("PV      {} / {}", player.hp, player.stats.max_hp())),
-        ResetColor,
-    ).ok();
-
-    // ── Colonne droite : liste des stats ──────────────────────────────────────
-    let sc = sc_info;
+    let sc = 48u16;
+    let right_width = (tw as usize).saturating_sub(sc as usize + 2);
 
     execute!(
         out,
@@ -208,8 +276,6 @@ fn draw(
         Print("STATISTIQUES"),
         ResetColor,
     ).ok();
-
-    let right_width = (tw as usize).saturating_sub(sc as usize + 2);
     execute!(
         out,
         MoveTo(sc, 3),
@@ -242,9 +308,7 @@ fn draw(
         }
     }
 
-    // ── Preview stat sélectionnée ─────────────────────────────────────────────
     let preview_row = 4 + STATS.len() as u16 + 1;
-
     execute!(
         out,
         MoveTo(sc, preview_row),
@@ -261,18 +325,15 @@ fn draw(
         Print(desc),
         ResetColor,
     ).ok();
-
-    let preview = stat_preview(player, key);
     execute!(
         out,
         MoveTo(sc, preview_row + 2),
         SetForegroundColor(Color::Cyan),
         SetAttribute(Attribute::Bold),
-        Print(&preview),
+        Print(stat_preview(player, key)),
         ResetColor,
     ).ok();
 
-    // ── Flash message (succès / erreur) ───────────────────────────────────────
     if let Some((msg, success)) = flash {
         execute!(
             out,
@@ -284,7 +345,134 @@ fn draw(
         ).ok();
     }
 
-    // ── Barre d'actions en bas ────────────────────────────────────────────────
+    draw_hint(out, tw, "[haut/bas] Choisir    [Entree] Ameliorer    [Esc] Retour");
+    out.flush().ok();
+}
+
+// ─── RENDU : VOYAGE RAPIDE ───────────────────────────────────────────────────
+
+fn draw_fast_travel(
+    out: &mut io::Stdout,
+    grace_name: &str,
+    list: &[(u32, &str, ZoneId)],
+    selected: usize,
+) {
+    let (tw, _th) = terminal::size().unwrap_or((120, 35));
+    execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
+
+    draw_header(out, grace_name, tw);
+
+    let sc = 4u16;
+
+    execute!(
+        out,
+        MoveTo(sc, 2),
+        SetForegroundColor(Color::White),
+        SetAttribute(Attribute::Bold),
+        Print("VOYAGE RAPIDE — Choisir une grace :"),
+        ResetColor,
+    ).ok();
+    execute!(
+        out,
+        MoveTo(sc, 3),
+        SetForegroundColor(Color::DarkGrey),
+        Print("─".repeat(50)),
+        ResetColor,
+    ).ok();
+
+    for (i, (_, name, zone)) in list.iter().enumerate() {
+        let row = 5 + i as u16;
+        let zone_name = zone.name();
+        if i == selected {
+            execute!(
+                out,
+                MoveTo(sc, row),
+                SetForegroundColor(Color::DarkYellow),
+                SetAttribute(Attribute::Bold),
+                Print(format!("▶ {:<30} {}", name, zone_name)),
+                ResetColor,
+            ).ok();
+        } else {
+            execute!(
+                out,
+                MoveTo(sc, row),
+                SetForegroundColor(Color::White),
+                Print(format!("  {:<30} {}", name, zone_name)),
+                ResetColor,
+            ).ok();
+        }
+    }
+
+    draw_hint(out, tw, "[haut/bas] Choisir    [Entree] Voyager    [Esc] Retour");
+    out.flush().ok();
+}
+
+// ─── UTILITAIRES DE RENDU ────────────────────────────────────────────────────
+
+fn draw_header(out: &mut io::Stdout, grace_name: &str, tw: u16) {
+    let title = format!("  Grace — {}  ", grace_name);
+    let bar   = "═".repeat((tw as usize).saturating_sub(title.len() + 4));
+    execute!(
+        out,
+        SetForegroundColor(Color::DarkYellow),
+        SetAttribute(Attribute::Bold),
+        Print(format!("══{}{}══\r\n", title, bar)),
+        ResetColor,
+    ).ok();
+}
+
+/// Dessine l'art ASCII + infos joueur en colonne gauche. Retourne le nombre de lignes de l'art.
+fn draw_art_and_info(out: &mut io::Stdout, player: &Player, tw: u16) -> u16 {
+    let ascii = player.class.ascii();
+    let mut row = 2u16;
+
+    for line in ascii.lines() {
+        execute!(
+            out,
+            MoveTo(2, row),
+            SetForegroundColor(Color::DarkGrey),
+            Print(line),
+            ResetColor,
+        ).ok();
+        row += 1;
+    }
+
+    row += 1;
+    execute!(out, MoveTo(2, row), SetForegroundColor(Color::White),
+        SetAttribute(Attribute::Bold), Print(&player.name), ResetColor).ok();
+    row += 1;
+
+    execute!(out, MoveTo(2, row), SetForegroundColor(Color::DarkYellow),
+        Print(format!("Niveau  {}", player.level)), ResetColor).ok();
+    row += 1;
+
+    execute!(out, MoveTo(2, row), SetForegroundColor(Color::White),
+        Print(format!("Ames    {}", player.souls)), ResetColor).ok();
+    row += 1;
+
+    let cost = player.soul_cost();
+    execute!(
+        out,
+        MoveTo(2, row),
+        SetForegroundColor(if player.souls >= cost { Color::Green } else { Color::Red }),
+        Print(format!("Cout    {} ames", cost)),
+        ResetColor,
+    ).ok();
+    row += 2;
+
+    let max_hp = player.stats.max_hp();
+    let hp_color = if player.hp * 100 / max_hp.max(1) > 60 { Color::Green }
+        else if player.hp * 100 / max_hp.max(1) > 30 { Color::Yellow }
+        else { Color::Red };
+    execute!(out, MoveTo(2, row), SetForegroundColor(hp_color),
+        Print(format!("PV      {} / {}", player.hp, max_hp)), ResetColor).ok();
+
+    let _ = tw;
+    row
+}
+
+fn draw_hint(out: &mut io::Stdout, tw: u16, hint: &str) {
+    let (_, th) = terminal::size().unwrap_or((tw, 35));
     let bar_row = th.saturating_sub(2);
     execute!(
         out,
@@ -293,16 +481,12 @@ fn draw(
         Print(format!("  {}  ", "─".repeat((tw as usize).saturating_sub(4)))),
         ResetColor,
     ).ok();
-
-    let hint    = "[haut/bas] Choisir    [Entree] Ameliorer    [Esc] Fermer";
-    let hint_x  = (tw.saturating_sub(hint.len() as u16)) / 2;
+    let hx = (tw.saturating_sub(hint.len() as u16)) / 2;
     execute!(
         out,
-        MoveTo(hint_x, bar_row + 1),
+        MoveTo(hx, bar_row + 1),
         SetForegroundColor(Color::DarkGrey),
         Print(hint),
         ResetColor,
     ).ok();
-
-    out.flush().ok();
 }

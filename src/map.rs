@@ -59,6 +59,15 @@ impl World {
         graces
     }
 
+    /// Trouve la zone et la location_id d'une grâce donnée.
+    pub fn location_of_grace(&self, grace_id: u32) -> Option<(ZoneId, u32)> {
+        self.zones.values().find_map(|z| {
+            z.locations.iter().find(|l| {
+                l.contents.grace.as_ref().map_or(false, |g| g.id == grace_id)
+            }).map(|l| (z.id, l.id))
+        })
+    }
+
     /// Trouve la zone qui contient une grâce donnée.
     pub fn zone_of_grace(&self, grace_id: u32) -> Option<ZoneId> {
         self.zones

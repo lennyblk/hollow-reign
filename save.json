@@ -1,39 +1,36 @@
 {
   "player_name": "Héros",
-  "player_class": "Knight",
-  "player_hp": 440,
+  "player_class": "Rogue",
+  "player_hp": 400,
   "player_souls": 0,
   "player_level": 1,
-  "stat_vigor": 14,
-  "stat_intelligence": 9,
-  "stat_faith": 9,
-  "stat_dexterity": 13,
-  "stat_arcane": 7,
-  "stat_mind": 9,
-  "stat_strength": 14,
+  "stat_vigor": 10,
+  "stat_intelligence": 11,
+  "stat_faith": 8,
+  "stat_dexterity": 20,
+  "stat_arcane": 11,
+  "stat_mind": 11,
+  "stat_strength": 10,
   "player_estus": 1,
   "player_last_grace": 1,
-  "inventory": [
-    "Bandage",
-    "Fragment de Carte"
-  ],
-  "eq_weapon": "Worn Shortsword",
+  "inventory": [],
+  "eq_weapon": null,
   "eq_armor": null,
   "eq_shield": null,
   "eq_consumables": [],
   "nav_zone": "Ashfeld",
   "nav_location_id": 4,
-  "nav_opened_chests": [
-    1
-  ],
+  "nav_opened_chests": [],
   "nav_last_locations": [
     [
       "Ashfeld",
-      5
+      2
     ]
   ],
+  "nav_killed_bosses": [],
+  "visited_graces": [
+    1
+  ],
   "active_quests": [],
-  "completed_quests": [
-    "Edric le Creux"
-  ]
+  "completed_quests": []
 }

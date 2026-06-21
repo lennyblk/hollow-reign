@@ -37,6 +37,7 @@ pub struct Player {
     pub lightning: LightningEffect,
     pub estus_charges: u32,
     pub last_grace: Option<u32>,
+    pub visited_graces: HashSet<u32>,
     pub active_quests: HashSet<String>,
     pub completed_quests: HashSet<String>,
 }
@@ -64,6 +65,7 @@ impl Player {
             lightning: FrostEffect::new(),
             estus_charges: 1,
             last_grace: None,
+            visited_graces: HashSet::new(),
             active_quests: HashSet::new(),
             completed_quests: HashSet::new(),
         }
@@ -96,6 +98,7 @@ impl Player {
     /// S'asseoir à une grâce — reset estus, sauvegarde la grâce, ennemis respawn géré par la map.
     pub fn rest_at_grace(&mut self, grace_id: u32) {
         self.last_grace = Some(grace_id);
+        self.visited_graces.insert(grace_id);
         self.estus_charges = self.max_estus();
         self.status = Status::default();
     }

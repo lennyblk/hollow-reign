@@ -55,7 +55,14 @@ fn main() {
                 };
                 player.rest_at_grace(id);
                 save::save(&player, &state);
-                grace_ui::run_grace_menu(&mut player, grace_name);
+                let travel = grace_ui::run_grace_menu(&mut player, grace_name, id, &world);
+                if let Some(target_id) = travel {
+                    if let Some((zone, loc_id)) = world.location_of_grace(target_id) {
+                        state.zone = zone;
+                        state.location_id = loc_id;
+                        state.last_location.insert(zone, loc_id);
+                    }
+                }
                 save::save(&player, &state);
             }
             NavigationEvent::TalkToNpc(npc) => {
@@ -216,7 +223,7 @@ fn show_victory() {
 }
 
 fn new_game(world: &World) -> (Player, NavigationState) {
-    let mut player = Player::new("Héros".to_string(), Class::Knight);
+    let mut player = Player::new("Héros".to_string(), Class::Rogue);
     player.hp = player.stats.max_hp();
     player.equipment.push(Equipment::empty());
     let state = NavigationState::new(world);
