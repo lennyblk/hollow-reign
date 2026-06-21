@@ -245,6 +245,20 @@ fn start_menu(has_save: bool) -> StartChoice {
     };
     use std::io::{self, Write};
 
+    // ── Musique de titre ──────────────────────────────────────────────────────
+    const TITLE_WAV: &[u8] = include_bytes!("assets/title.wav");
+    let _audio_guard = {
+        use rodio::{Decoder, OutputStream, Sink, Source};
+        use std::io::Cursor;
+        OutputStream::try_default().ok().and_then(|(stream, handle)| {
+            let sink = Sink::try_new(&handle).ok()?;
+            let source = Decoder::new(Cursor::new(TITLE_WAV)).ok()?.repeat_infinite();
+            sink.append(source);
+            sink.set_volume(0.6);
+            Some((stream, sink))
+        })
+    };
+
     const ART: &[&str] = &[
         r" _____                                                             _____ ",
         r"( ___ )-----------------------------------------------------------( ___ )",
