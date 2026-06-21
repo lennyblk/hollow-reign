@@ -62,6 +62,7 @@ pub enum NavigationEvent {
     EnterCombat,
     OpenChest(u32),
     OpenInventory,
+    OpenMerchant(ZoneId),
     Save,
     Quit,
 }
@@ -83,6 +84,7 @@ pub fn run_navigation(world: &World, state: &mut NavigationState) -> NavigationE
         let has_grace = location.contents.grace.is_some();
         let has_npc = location.contents.npc.is_some();
         let has_enemies = !location.contents.enemies.is_empty();
+        let has_merchant = location.contents.merchant;
         let num_connections = location.connections.len();
         let chest_id = location.contents.chest.as_ref()
             .map(|c| c.id)
@@ -124,6 +126,10 @@ pub fn run_navigation(world: &World, state: &mut NavigationState) -> NavigationE
                 // Combat
                 KeyCode::Char('e') | KeyCode::Char('E') if has_enemies => {
                     break NavigationEvent::EnterCombat;
+                }
+                // Marchand
+                KeyCode::Char('m') | KeyCode::Char('M') if has_merchant => {
+                    break NavigationEvent::OpenMerchant(state.zone);
                 }
                 // Inventaire (toujours disponible)
                 KeyCode::Char('i') | KeyCode::Char('I') => {
@@ -316,6 +322,9 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState) {
     }
     if location.contents.npc.is_some() {
         actions.push(("T", "Parler"));
+    }
+    if location.contents.merchant {
+        actions.push(("M", "Marchand"));
     }
     if !location.contents.enemies.is_empty() {
         actions.push(("E", "Combattre"));

@@ -11,6 +11,7 @@ mod inventory_ui;
 mod item;
 mod map;
 mod map_ui;
+mod merchant_ui;
 mod navigation;
 mod npc_ui;
 mod phrases;
@@ -113,6 +114,11 @@ fn main() {
                 println!("  Appuie sur Entree...");
                 let mut buf = String::new();
                 std::io::stdin().read_line(&mut buf).ok();
+            }
+            NavigationEvent::OpenMerchant(zone) => {
+                let mut out = std::io::stdout();
+                merchant_ui::open_merchant(&mut out, &mut player, zone);
+                save::save(&player, &state);
             }
             NavigationEvent::OpenInventory => {
                 let mut out = std::io::stdout();
