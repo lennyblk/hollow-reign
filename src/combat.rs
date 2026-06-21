@@ -4,6 +4,7 @@ use crate::player::Player;
 
 const ELEMENTAL_COOLDOWN: u32 = 3;
 
+#[derive(Debug)]
 pub enum ParryResult {
     Perfect, // frappe rapide et sans faute → plein bonus
     Good,    // frappe correcte mais lente → bonus partiel
