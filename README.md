@@ -123,6 +123,16 @@ Quatre PNJ sont repartis dans les zones. Chacun propose une quete avec une recom
 
 ---
 
+## Telecharger (Windows)
+
+Un executable Windows precompile est disponible sur la page des releases :
+
+https://github.com/lennyblk/hollow-reign/releases/tag/v1
+
+Telechargez `hollow-reign.exe`, placez-le ou vous voulez et lancez-le depuis un terminal. Aucune installation requise.
+
+---
+
 ## Prerequis pour compiler
 
 - [Rust](https://rustup.rs/) 1.85 ou superieur (edition 2024)
