@@ -1,5 +1,13 @@
+use crate::catalog::{
+    antidote, ashfall_katana, ashcaster_robes, ashen_bulwark, bandage, boneguard, chainmail,
+    cooling_salve, dawnbreaker, frost_salts, gravecrusher, grounding_wrap, haste_draught,
+    hollowed_armor, hunters_blade, iron_kite_shield, ironwood_club, knights_plate, leather_vest,
+    pilgrims_coat, purifying_salt, runebreaker, shadowweave_mantle, siege_ash, silverwind_rapier,
+    sundermaul, tattered_rags, thornwood_shield, throwing_knife, voidstaff, wardens_harness,
+    wooden_buckler, worn_shortsword, wraithplate,
+};
 use crate::enemy::{Enemy, EnemyType};
-use crate::item::Element;
+use crate::item::{Element, Item};
 use crate::zone::ZoneId;
 
 // ─── ASHFELD ─────────────────────────────────────────────────────────────────
@@ -282,5 +290,63 @@ pub fn spawn(zone: ZoneId, enemy_type: EnemyType, element: Element) -> Enemy {
             "spawn non cataloguee: {:?} / {:?} / {:?}",
             zone, enemy_type, element
         ),
+    }
+}
+
+// ─── DROPS ───────────────────────────────────────────────────────────────────
+
+/// Items droppés à la mort d'un ennemi.
+/// Mobs → rien. Leaders → 1 consommable. Minibosses → 1 arme/armure. Bosses → set complet.
+pub fn drops(zone: ZoneId, enemy_type: EnemyType, element: Element) -> Vec<Item> {
+    match (zone, enemy_type, element) {
+        // ── Leaders ──────────────────────────────────────────────────────────
+        // Arme légère ou bouclier basique selon la zone
+        (ZoneId::Ashfeld,    EnemyType::MobLeader, Element::Bleed) => vec![wooden_buckler()],
+        (ZoneId::Rotwood,    EnemyType::MobLeader, Element::Rot)   => vec![thornwood_shield()],
+        (ZoneId::TheCinders, EnemyType::MobLeader, Element::Fire)  => vec![throwing_knife()],
+        (ZoneId::Frostveil,  EnemyType::MobLeader, Element::Ice)   => vec![chainmail()],
+
+        // ── Minibosses ───────────────────────────────────────────────────────
+        (ZoneId::Gravemoor, EnemyType::MiniBoss, Element::Poison) => vec![hunters_blade(),       pilgrims_coat()],
+        (ZoneId::Rotwood,   EnemyType::MiniBoss, Element::Poison) => vec![gravecrusher(),        shadowweave_mantle()],
+        (ZoneId::TheVoid,   EnemyType::MiniBoss, Element::Rot)    => vec![runebreaker(),         haste_draught()],
+
+        // ── Bosses : weapon + armor + shield + consumable ─────────────────────
+        (ZoneId::TheCinders, EnemyType::Boss, Element::Fire) => vec![
+            ashfall_katana(),
+            ashcaster_robes(),
+            ashen_bulwark(),
+            cooling_salve(),
+        ],
+        (ZoneId::Frostveil, EnemyType::Boss, Element::Lightning) => vec![
+            dawnbreaker(),
+            knights_plate(),
+            iron_kite_shield(),
+            grounding_wrap(),
+        ],
+        (ZoneId::TheVoid, EnemyType::Boss, Element::Rot) => vec![
+            voidstaff(),
+            wraithplate(),
+            boneguard(),
+            purifying_salt(),
+        ],
+
+        // Mobs et le reste → rien
+        _ => vec![],
+    }
+}
+
+// ─── COFFRES ─────────────────────────────────────────────────────────────────
+
+/// Contenu d'un coffre par son id (défini dans zone.rs).
+pub fn open_chest(id: u32) -> Vec<Item> {
+    match id {
+        1 => vec![worn_shortsword(), bandage()],            // Ashfeld    - Tour de guet       (arme de base + soin)
+        2 => vec![antidote(), tattered_rags()],           // Gravemoor  - Sentier des Tombes  (conso + armure basique)
+        3 => vec![ironwood_club(), leather_vest()],       // Rotwood    - Sous-bois Maudit    (arme + armure mid)
+        4 => vec![siege_ash(), wardens_harness()],        // Cinders    - Salle de Fonte      (buff + armure mid-late)
+        5 => vec![frost_salts(), silverwind_rapier()],    // Frostveil  - Temple de la Foudre (conso + arme Ice)
+        6 => vec![sundermaul(), hollowed_armor()],        // The Void   - Sanctuaire Maudit   (arme + armure late)
+        _ => vec![],
     }
 }

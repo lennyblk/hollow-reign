@@ -7,6 +7,7 @@ mod equipment;
 mod grace;
 mod item;
 mod map;
+mod navigation;
 mod phrases;
 mod player;
 mod stats;
@@ -14,27 +15,48 @@ mod status;
 mod typing;
 mod zone;
 
-use phrases::{Difficulty, PhrasePool};
-use typing::{perfect_threshold, time_limit_ms, typing_challenge};
+use enemy_catalog::open_chest;
+use map::World;
+use navigation::{NavigationEvent, NavigationState, run_navigation};
 
 fn main() {
-    let mut pool = PhrasePool::new();
+    let world = World::new();
+    let mut state = NavigationState::new(&world);
 
-    for (label, diff) in [
-        ("MOB        (Short  / 5s) ", Difficulty::Short),
-        ("MOB LEADER (Medium / 10s)", Difficulty::Medium),
-        ("BOSS       (Long   / 18s)", Difficulty::Long),
-    ] {
-        println!("\n--- {} ---", label);
-        println!("Appuie sur Entree pour lancer...");
-        let mut buf = String::new();
-        std::io::stdin().read_line(&mut buf).ok();
-
-        let limit = time_limit_ms(&diff);
-        let pct = perfect_threshold(&diff);
-        let phrase = pool.next(diff);
-        let result = typing_challenge(phrase, limit, pct);
-
-        println!("Resultat : {:?}\n", result);
+    loop {
+        match run_navigation(&world, &mut state) {
+            NavigationEvent::RestAtGrace(id) => {
+                println!("\r\n  [Grace] Repos a la grace #{}. PV restaures.\r\n", id);
+                println!("  Appuie sur Entree...");
+                let mut buf = String::new();
+                std::io::stdin().read_line(&mut buf).ok();
+            }
+            NavigationEvent::TalkToNpc(npc) => {
+                println!("\r\n  [NPC] {} : \"...\" (dialogue a implementer)\r\n", npc);
+                println!("  Appuie sur Entree...");
+                let mut buf = String::new();
+                std::io::stdin().read_line(&mut buf).ok();
+            }
+            NavigationEvent::EnterCombat => {
+                println!("\r\n  [Combat] (a implementer)\r\n");
+                println!("  Appuie sur Entree...");
+                let mut buf = String::new();
+                std::io::stdin().read_line(&mut buf).ok();
+            }
+            NavigationEvent::OpenChest(id) => {
+                let items = open_chest(id);
+                println!("\r\n  [Coffre] Ouvert !");
+                for item in &items {
+                    println!("    + {}", item.name());
+                }
+                println!("\r\n  Appuie sur Entree...");
+                let mut buf = String::new();
+                std::io::stdin().read_line(&mut buf).ok();
+            }
+            NavigationEvent::Quit => {
+                println!("\r\n  Au revoir.\r\n");
+                break;
+            }
+        }
     }
 }

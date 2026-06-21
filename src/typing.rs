@@ -1,6 +1,6 @@
 use crossterm::{
     cursor::{Hide, MoveUp, RestorePosition, SavePosition, Show},
-    event::{self, Event, KeyCode},
+    event::{self, Event, KeyCode, KeyEventKind},
     execute,
     style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
     terminal::{self, Clear, ClearType},
@@ -64,6 +64,7 @@ pub fn typing_challenge(phrase: &str, limit_ms: u64, perfect_pct: u64) -> ParryR
         let remaining = limit.saturating_sub(start.elapsed());
         if event::poll(remaining.min(Duration::from_millis(80))).unwrap_or(false) {
             if let Ok(Event::Key(key)) = event::read() {
+                if key.kind != KeyEventKind::Press { continue; }
                 match key.code {
                     KeyCode::Char(c) => {
                         if c == chars[typed] {

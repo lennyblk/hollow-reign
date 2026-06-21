@@ -55,11 +55,17 @@ pub struct GracePoint {
     pub name: &'static str,
 }
 
+/// Coffre avec un id numérique — le contenu est défini dans enemy_catalog::open_chest().
+pub struct Chest {
+    pub id: u32,
+}
+
 pub struct LocationContents {
     pub grace: Option<GracePoint>,
     pub npc: Option<&'static str>,
     pub merchant: bool,
     pub enemies: Vec<EnemySpawn>,
+    pub chest: Option<Chest>,
 }
 
 impl LocationContents {
@@ -69,6 +75,7 @@ impl LocationContents {
             npc: None,
             merchant: false,
             enemies: vec![],
+            chest: None,
         }
     }
 }
@@ -152,6 +159,9 @@ fn go_one_way(label: &'static str, id: u32) -> LocationConnection {
         one_way: true,
     }
 }
+fn chest_here(id: u32) -> Chest {
+    Chest { id }
+}
 fn go_zone(label: &'static str, zone: ZoneId) -> LocationConnection {
     LocationConnection {
         label,
@@ -204,6 +214,7 @@ pub fn ashfeld() -> Zone {
                 ],
                 contents: LocationContents {
                     enemies: vec![leader(Element::Bleed)],
+                    chest: Some(chest_here(1)),
                     ..LocationContents::empty()
                 },
             },
@@ -218,6 +229,7 @@ pub fn ashfeld() -> Zone {
                     npc: Some("Edric le Creux"),
                     merchant: true,
                     enemies: vec![],
+                    chest: None,
                 },
             },
             Location {
@@ -275,6 +287,7 @@ pub fn gravemoor() -> Zone {
                 ],
                 contents: LocationContents {
                     enemies: vec![mob(Element::Poison, 3)],
+                    chest: Some(chest_here(2)),
                     ..LocationContents::empty()
                 },
             },
@@ -361,6 +374,7 @@ pub fn rotwood() -> Zone {
                 contents: LocationContents {
                     enemies: vec![mob(Element::Rot, 3)],
                     merchant: true,
+                    chest: Some(chest_here(3)),
                     ..LocationContents::empty()
                 },
             },
@@ -473,6 +487,7 @@ pub fn the_cinders() -> Zone {
                 ],
                 contents: LocationContents {
                     enemies: vec![mob(Element::Fire, 3)],
+                    chest: Some(chest_here(4)),
                     ..LocationContents::empty()
                 },
             },
@@ -560,6 +575,7 @@ pub fn frostveil() -> Zone {
                 contents: LocationContents {
                     npc: Some("Le Pelerin Pale"),
                     merchant: true,
+                    chest: Some(chest_here(5)),
                     ..LocationContents::empty()
                 },
             },
@@ -626,6 +642,7 @@ pub fn the_void() -> Zone {
                 connections: vec![go("← Couloir du Neant", 2), go("→ Chambre du Roi Creux", 4)],
                 contents: LocationContents {
                     grace: Some(grace(12, "Sanctuaire Maudit")),
+                    chest: Some(chest_here(6)),
                     ..LocationContents::empty()
                 },
             },
