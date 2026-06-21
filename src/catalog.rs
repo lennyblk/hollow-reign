@@ -892,7 +892,23 @@ pub fn antidote() -> Item {
         name: "Antidote".into(),
         description: "Fiole de contrepoison distillée à partir d'herbes rares. Neutralise immédiatement le Poison actif et ses stacks.",
         effect: ConsumableEffect::CurePoison,
-        ascii: "",
+        ascii: r#"
+              ░░░
+             ▒  ▒▒
+            ░▒░▒░▒▒
+            ▒   ░░▒
+             ▒░░▒▒
+             ▒ ░░▒
+             ▒  ░▒
+            ▒ ░░░░▒
+           ░ ░  ░░░▒
+         ░░░       ░░▒
+        ▒░           ░▒
+       ▒░░░░  ░░░░░░ ░░▒
+      ░  ░░   ░░░░░░░░  ░
+        ▓░     ░░░    ▓
+            ░▒▒▒▒▒░
+"#,
     })
 }
 
@@ -901,7 +917,18 @@ pub fn frost_salts() -> Item {
         name: "Frost Salts".into(),
         description: "Sels thermiques récoltés près de sources volcaniques. Dissout les cristaux de glace dans les veines et lève le gel.",
         effect: ConsumableEffect::CureFrost,
-        ascii: "",
+        ascii: r#"
+       ▒▓▒▒▒▒░░ ░░░░▒▓
+   ▒░▒░░░░░▒▒░░░     ░░░░▒▒▓
+ ▓▒░░░░░░░▓▒ ░▒░      ░░▒▒▒░▒▒▒
+▒░░░░░░░▒▓▓░▒▓░░      ░░░░▒░▒▒▒
+▒░░░░░▒░▒▓▒░░▒░ ░▒▒ ░░░░░░░▒▒▓▓
+ █▒░░▒░░░▒░ ░▒   ░   ░    ▒▓▓▒▒
+  ██▓▒░░░░░ ░░       ░░ ░▒▒▒▓▓
+    ██████▓▓▒▒░░ ░ ░░▒▒▒▓▓██
+      ████████▓▓▓▓▓▓▓████
+          ██████████▓█
+"#,
     })
 }
 
@@ -910,7 +937,25 @@ pub fn throwing_knife() -> Item {
         name: "Throwing Knife".into(),
         description: "Couteau de lancer affûté. Inflige 35 dégâts directs à un ennemi ciblé. Usage unique.",
         effect: ConsumableEffect::DealDamage(35),
-        ascii: "",
+        ascii: r#"
+
+
+         ░▒         ▒▓░
+     ▓██████▒     ▒▓▓▓
+   ▒███████▓   ▒▓▒▒░
+  ░████████▓▓▓▓▓▓░    ▒▓▓▓
+  ▒████████▓▓▓██░   ▒▒▒▓░
+   ▓███▓▒▓▓▓███▓█▓▓▓▓▒    ▒▓▓▒
+      ░▓▓█▓▒██▓▓▓▓▓████░▒▒▓▓░
+     ▒▓▓▒▒███▓▓▓██▓▓▓▓▓▓▒▒
+    ▒▒▒░  ░▓▓▓▓▓██▓▓▓▓▓█▓
+  ░░     ▒▓▓▓▒▓██▓▓▓███▓██▒
+        ▓▓▒▒░ ░▓▓▓█████▓▓▓█▓
+      ░▒░    ▒▓▓▓▒▓███████▓█▓
+            ▓▓▒▒░   ░▓███████▒
+          ░▒░░          ▒▒▓▓▒
+        ░░
+"#,
     })
 }
 
@@ -919,7 +964,29 @@ pub fn siege_ash() -> Item {
         name: "Siege Ash".into(),
         description: "Poudre explosive incendiaire utilisée par les légions de siège. Inflige 50 dégâts de feu à un ennemi ciblé. Usage unique.",
         effect: ConsumableEffect::DealFireDamage(50),
-        ascii: "",
+        ascii: r#"
+
+
+
+          ░████████▓
+           ████████▓
+         ▒▓███▓▓███▓▓░
+        ▓███▓▒░░░▒████▒
+        ██████▓▓▓█████▓
+        ████▓▓▓▓▓▓█████░
+        ██▓▓█▓█▓▓▓▒▓▓██░
+        ▓█████████▓████░
+        ███████▓▓█▓▓█▓█░
+        ███▒▒▒█▓█▓▒▓███░
+        ███████▓███████░
+        ▒▒▒▓▓▒▒▒▓▒▒▓▒░▒░
+        ▒░ ░░ ░░░░ ░ ░▒░
+        █▒▓█▓▒▒▒▓▒▓████░
+        ▓▓▓▓▒▒▒▒▒▒▒▓▓▓▓
+         ▓▓▓▓▓▓▓▓▓▓▓▓▓░
+              ░░░░
+
+"#,
     })
 }
 
@@ -931,7 +998,24 @@ pub fn haste_draught() -> Item {
             bonus: 20,
             turns: 3,
         },
-        ascii: "",
+        ascii: r#"
+                       ▓▒▓█
+                     ▓▓▓▓▓▓█
+                   ▓▓▒▓▓▓▓█
+                 ▓▓▒░░░▒▓█
+      ▓▒▒▒▓▓▓  ▓░ ░░░░▒▓
+      ▒░▒▓▒ ░▒▒  ░░░░░▒
+       ▓▓░  ▒▒ ░▒▓▓▒▓▓
+        █▒▒░░ ▒▒▓▓▓▓█
+       ▒▒▒░░ ░▒▒▒▓▓██
+       ▒░  ░▒▒▒▓▓▓▓▓▓
+      ░░ ░▒▒▓▓▓▓▓▒▒▒
+    ▒░  ░▒▓▓▓▓█
+   ▒ ░░░░▓▓▓▓
+   █▓░░▒▓▓▓█
+    █▓▓▓▓▓█
+        █
+"#,
     })
 }
 
@@ -940,7 +1024,24 @@ pub fn bandage() -> Item {
         name: "Bandage".into(),
         description: "Bandage de compression traité avec de la cire hémostatique. Stoppe immédiatement les saignements actifs et leurs stacks.",
         effect: ConsumableEffect::CureBleed,
-        ascii: "",
+        ascii: r#"
+
+
+
+                    ███▓▒▒▓█
+        ██▓▓████▓▓▓▓▒░░░░░░░▓█
+ ██▓▒░░░░░░░░░▓▓▓▓░░▓▓▒░░░░░░▒
+█▒░░▒░░░░▒▒▒░░░▒▓▓░░░░▓░░░░░░░▓
+▓▒░░░░░░░░░░░░░░▓▓▓▓░▒▓▓░░░░░░▓
+▓▒░░░░░░░░░░░░░░░▓▓▓▓▓▓▓░░░░░░▓
+▓▒░░▒░░░░░░░░░░░░▓▓▓▓▓▓█░░░░░▓
+█▓░░▓▒░░░░░░░░░░░▒▓▓▓▓▓▓░▒▒▓█
+ █▒░▒░▒░░░░░░░░░░▓▓▓▓██
+  ▓░░░▒░░░░░░░░░▒██
+   ▓░░░░░░░░▒▒█
+    █▓▒▓▓█
+
+"#,
     })
 }
 
@@ -949,7 +1050,23 @@ pub fn cooling_salve() -> Item {
         name: "Cooling Salve".into(),
         description: "Onguent à base d'argile réfrigérante. Éteint les brûlures actives et réinitialise les stacks de feu sur le corps.",
         effect: ConsumableEffect::CureFire,
-        ascii: "",
+        ascii: r#"
+            ▓▓▒▒▒▓▓
+          ▓▓▒░░░░▒▓▓▓
+         █▒▒░░░░░▒▓▓▓█
+           ▓▒▒▒▒▒▓▒▓▓
+         █▓▒▓▓▓▓▓▓▓▓▓█
+          ▓▓▒▒▒▒▒▒▒▒▓
+          █▓▓▒▓▓▓▒▒▓▓
+       ▓▒▒░░▒▒▒▒▒▒▒▒▒▒▓▓
+      ▓▒░░░░░░▒▒▒▒▒▓▓▒▒▓▓
+      ▓░░░░░░░░▒▒▒▒▒▓▓▓▓██
+      ▓░▒░░░░░▒▒▒▓▓▓▓██▓▓█
+      ▓▒░░░▒▒▒▒▒▒▓▓▓▓▓▓▓▓
+       ▓▓▒▒▒▓▓▒▒▒▓▓▓▓▓▓▓
+        ▓▓▓▓▓▓▓▓████▓▓▓
+         ▓▓▓▓▓▓▓▓▓▓▓▓▓
+"#,
     })
 }
 
@@ -958,7 +1075,24 @@ pub fn purifying_salt() -> Item {
         name: "Purifying Salt".into(),
         description: "Sel blanc béni qui purifie la chair en décomposition. Élimine la Rot active et ses stacks accumulés.",
         effect: ConsumableEffect::CureRot,
-        ascii: "",
+        ascii: r#"
+
+
+
+
+            ░░░░░░░
+            ░▒▓▓▓▓▒░
+            ░░▒▒▒░░░
+             ░▒▒▒▒▒░
+             ░░▒▒▒░░
+            ░░▒▒▒▒░░
+            ░░░░▒░░
+             ░░▒▒░
+             ░░▒▒░
+
+
+
+"#,
     })
 }
 
@@ -967,7 +1101,23 @@ pub fn grounding_wrap() -> Item {
         name: "Grounding Wrap".into(),
         description: "Bandage isolant en fibre de cuivre tressée. Dissipe l'électricité résiduelle dans les muscles et lève l'électrocution.",
         effect: ConsumableEffect::CureLightning,
-        ascii: "",
+        ascii: r#"
+                      ██
+                █████▓██▓▓█
+   ▓▓█▓▓█▓█▓███████████▓▓▓▓▓▓
+  █▓▒▒▒▒▒▒▒▓▓█████▓▓▓▓▓▓▓▒▓▓▓█
+ ██▒▒▒▒▒▒▒▓▓██████▓▓▓▒▒▓▓▓▓▓▓██
+  ▓▒▒▒▒▒▒▓▓█████▓▓▓▓▒▒▒▒▒▒▒▒▒▓█
+█▓▒▒▒▒▒▒▓▓██████▓▓▓▒▒▒▒▒▒▒▒▒▓
+ █▓▒▓▒▒▒▓██████▓▓▓▓▒▒▒▓▓▓▒▒█
+ █▓▓▒▒▒▓██████▓▓▓▓▒▒▒▒▓▓▒▓
+   ██▓███████▓▓▓▓▓▒▒▒▓▓▓▓
+      ██████▓▓▓▓▒▒▒▒▓▓▓▓
+       █████▓▓▓▒▒▒▒▒▒▒▓
+        ████▓▓▒▒▒▒▒▒▒▒
+           ███▓▒▒▒▒▒▒█
+              ██▓▓▓▓█
+"#,
     })
 }
 
@@ -976,6 +1126,22 @@ pub fn map_fragment() -> Item {
         name: "Torn Map Fragment".into(),
         description: "Morceau de parchemin arraché d'une carte plus grande. Quelqu'un cherche peut-être ce qu'il révèle.",
         effect: ConsumableEffect::QuestItem,
-        ascii: "",
+        ascii: r#"
+               █▓▓▓▓
+            ▓▓▓▓▒▒▒▒▓▓
+     ▓▓▓▓▓▒▒▒▒▒▒▒▒▒▓▓
+    ▓▓▓▓▒▒▒▓▓▓▓▓▓▓▓▓▓▓
+    ▓▓▓▓▓▒▓▓▓▓▓▓▓▓▓▓▓
+     ▓▓▓█▒▓▓▓▓▓▓▓▓▓▓▓
+        ▓▒▓▓▓▓▓▓▓▓▓▓▓
+       ▓▒▓▓▓▓▓▓▓▓▓▓▓▓▓█
+       ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+        ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒▓▓▓
+         ▓▓▓▓▓▓▓▓▓▒▒▒▒▒▓▓▓▓
+          ▓▓▓▒▒▒▒▒▒▒▓▓▓▓▓▓
+          ▓▓▓▓▒▒▒▒▓▓▓█
+          █▓▓▓▓▓▓▓▓
+           █▓▓▓▓
+"#,
     })
 }
