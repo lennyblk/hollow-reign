@@ -348,7 +348,8 @@ fn element_label(e: &Element) -> &'static str {
 // ─── RENDU ───────────────────────────────────────────────────────────────────
 
 fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[String], turn: u32) {
-    let w = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+    let (tw, _) = terminal::size().unwrap_or((80, 24));
+    let w = tw as usize;
     execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
 
     // ── En-tête ───────────────────────────────────────────────────────────────
@@ -362,10 +363,9 @@ fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[St
         ResetColor,
     ).ok();
 
-    // ── Ennemis ───────────────────────────────────────────────────────────────
-    for e in &combat.enemies {
-        draw_entity_block(out, e.ascii, &e.name, e.hp, e.max_hp, &e.elements, e.is_alive(), Color::Red);
-    }
+    // ── Ennemis côte à côte ───────────────────────────────────────────────────
+    let next_row = draw_enemies_columns(out, combat, 2, w);
+    execute!(out, MoveTo(0, next_row)).ok();
 
     // ── Séparateur ────────────────────────────────────────────────────────────
     separator(out, w);
@@ -405,88 +405,87 @@ fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[St
     out.flush().ok();
 }
 
-/// Bloc générique : ASCII à gauche, stats à droite.
-/// Utilisé pour les ennemis et (avec légères variantes) le joueur.
-fn draw_entity_block(
-    out: &mut io::Stdout,
-    ascii: &str,
-    name: &str,
-    hp: u32,
-    max_hp: u32,
-    elements: &[Element],
-    alive: bool,
-    name_color: Color,
-) {
-    if !alive {
-        execute!(
-            out,
-            SetForegroundColor(Color::DarkGrey),
-            Print(format!("  {:<24} [mort]\r\n\r\n", name)),
-            ResetColor,
-        ).ok();
-        return;
-    }
+/// Affiche tous les ennemis côte à côte en colonnes égales.
+/// Retourne la prochaine ligne libre après le bloc ennemis.
+fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w: usize) -> u16 {
+    let n = combat.enemies.len();
+    if n == 0 { return start_row; }
 
-    let ascii_lines: Vec<&str> = ascii.lines().collect();
-    let has_ascii = !ascii_lines.is_empty();
+    let col_w = w / n;
 
-    // Largeur de la colonne ASCII (padded pour aligner les stats)
-    let ascii_col = if has_ascii {
-        ascii_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0) + 3
-    } else {
-        0
-    };
+    let max_h: u16 = combat.enemies.iter().map(|e| {
+        if !e.is_alive() { 1u16 }
+        else { e.ascii.lines().count().max(3) as u16 }
+    }).max().unwrap_or(1);
 
-    let elems: String = elements.iter().map(|e| element_label(e)).collect::<Vec<_>>().join("/");
+    for row in 0..max_h {
+        for (ci, e) in combat.enemies.iter().enumerate() {
+            let x = (ci * col_w + 2) as u16;
+            let y = start_row + row;
+            execute!(out, MoveTo(x, y)).ok();
 
-    // Lignes de stats : [nom, barre HP, éléments]
-    let stat_count = 3;
-    let row_count = ascii_lines.len().max(stat_count);
+            if !e.is_alive() {
+                if row == 0 {
+                    execute!(
+                        out,
+                        SetForegroundColor(Color::DarkGrey),
+                        Print(format!("{} [mort]", e.name)),
+                        ResetColor,
+                    ).ok();
+                }
+                continue;
+            }
 
-    for i in 0..row_count {
-        execute!(out, Print("  ")).ok();
+            let ascii_lines: Vec<&str> = e.ascii.lines().collect();
+            let ascii_w = ascii_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+            let elems: String = e.elements.iter().map(|el| element_label(el)).collect::<Vec<_>>().join("/");
 
-        // Colonne ASCII
-        if has_ascii {
-            let line = ascii_lines.get(i).copied().unwrap_or("");
-            execute!(
-                out,
-                SetForegroundColor(Color::DarkGrey),
-                Print(format!("{:<ascii_col$}", line)),
-                ResetColor,
-            ).ok();
-        }
-
-        // Colonne stats
-        match i {
-            0 => execute!(
-                out,
-                SetForegroundColor(name_color),
-                SetAttribute(Attribute::Bold),
-                Print(name),
-                ResetColor,
-            ).ok(),
-            1 => {
-                print_hp_bar(out, hp, max_hp, 16);
+            // Colonne ASCII
+            if let Some(line) = ascii_lines.get(row as usize) {
                 execute!(
                     out,
-                    SetForegroundColor(hp_color(hp, max_hp)),
-                    Print(format!(" {:>3}/{:<3}", hp, max_hp)),
+                    SetForegroundColor(Color::DarkGrey),
+                    Print(format!("{:<ascii_w$}", line)),
                     ResetColor,
-                ).ok()
+                ).ok();
+            } else if ascii_w > 0 {
+                execute!(out, Print(" ".repeat(ascii_w))).ok();
             }
-            2 => execute!(
-                out,
-                SetForegroundColor(Color::DarkYellow),
-                Print(&elems),
-                ResetColor,
-            ).ok(),
-            _ => execute!(out, Print("")).ok(),
-        };
 
-        execute!(out, Print("\r\n")).ok();
+            if ascii_w > 0 {
+                execute!(out, Print("  ")).ok();
+            }
+
+            // Stats (3 premières lignes)
+            match row as usize {
+                0 => { execute!(
+                    out,
+                    SetForegroundColor(Color::Red),
+                    SetAttribute(Attribute::Bold),
+                    Print(&e.name),
+                    ResetColor,
+                ).ok(); }
+                1 => {
+                    print_hp_bar(out, e.hp, e.max_hp, 14);
+                    execute!(
+                        out,
+                        SetForegroundColor(hp_color(e.hp, e.max_hp)),
+                        Print(format!(" {:>3}/{:<3}", e.hp, e.max_hp)),
+                        ResetColor,
+                    ).ok();
+                }
+                2 => { execute!(
+                    out,
+                    SetForegroundColor(Color::DarkYellow),
+                    Print(&elems),
+                    ResetColor,
+                ).ok(); }
+                _ => {}
+            }
+        }
     }
-    execute!(out, Print("\r\n")).ok();
+
+    start_row + max_h + 1
 }
 
 fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat) {

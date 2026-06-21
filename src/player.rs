@@ -11,6 +11,7 @@ type LightningEffect = FrostEffect;
 
 const INVENTORY_MAX: usize = 20;
 
+#[allow(dead_code)]
 pub struct DroppedSouls {
     pub amount: u32,
     pub x: f32,
@@ -137,6 +138,7 @@ impl Player {
     }
 
     /// Coût total pour acheter n niveaux (preview avant confirmation).
+    #[allow(dead_code)]
     pub fn total_cost(&self, n: u32) -> u32 {
         (0..n).map(|i| 10 + (self.level + i) * (self.level + i) / 5).sum()
     }
@@ -156,6 +158,7 @@ impl Player {
     }
 
     /// Achète n niveaux dans une stat. Retourne le nombre de niveaux réellement achetés.
+    #[allow(dead_code)]
     pub fn level_up_n(&mut self, stat: &str, n: u32) -> u32 {
         (0..n).take_while(|_| self.level_up(stat)).count() as u32
     }

@@ -66,6 +66,7 @@ impl Enemy {
         }
     }
 
+    #[allow(dead_code)]
     pub fn can_parry(&self) -> bool {
         matches!(self.enemy_type, EnemyType::Boss)
     }
@@ -78,10 +79,12 @@ impl Enemy {
         self.status.can_act()
     }
 
+    #[allow(dead_code)]
     pub fn can_respawn(&self) -> bool {
         !matches!(self.enemy_type, EnemyType::Boss)
     }
 
+    #[allow(dead_code)]
     pub fn respawn(&mut self) {
         if self.can_respawn() {
             self.hp = self.max_hp;
@@ -103,6 +106,7 @@ impl Enemy {
         reduced
     }
 
+    #[allow(dead_code)]
     pub fn apply_armor_break(&mut self, reduction_percent: u32, turns: u32) {
         self.temp_defense_reduction = self.defense * reduction_percent / 100;
         self.temp_defense_turns = turns;

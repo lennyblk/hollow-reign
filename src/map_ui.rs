@@ -2,7 +2,7 @@ use std::io::{self, Write};
 
 use crossterm::{
     cursor::MoveTo,
-    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    event::{self, Event, KeyEvent, KeyEventKind},
     execute,
     style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
     terminal::{self, Clear, ClearType},

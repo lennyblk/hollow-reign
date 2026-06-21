@@ -38,6 +38,7 @@ impl Equipment {
         }
     }
 
+    #[allow(dead_code)]
     pub fn unequip_consumable(&mut self, index: usize) -> Option<Item> {
         if index < self.consumables.len() {
             Some(self.consumables.remove(index))

@@ -64,8 +64,7 @@ impl Combat {
     }
 
     /// Attaque spéciale de l'arme (tous les 3 tours).
-    /// Applique toujours le burst élémentaire sur la cible + l'effet unique de l'arme.
-    /// Retourne les dégâts totaux infligés.
+    #[allow(dead_code)]
     pub fn apply_weapon_ability(
         &mut self,
         player: &mut Player,

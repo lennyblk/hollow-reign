@@ -43,6 +43,7 @@ impl Stats {
     }
 
     /// pour afficher le menu grâce.
+    #[allow(dead_code)]
     pub fn all(&self) -> [(&str, u32); 7] {
         [
             ("vigor", self.vigor),

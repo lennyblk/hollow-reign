@@ -36,9 +36,10 @@ pub enum LocationTarget {
 }
 
 pub struct LocationConnection {
-    pub label: &'static str, // "→ vers le nord", "↓ descendre la falaise"
+    pub label: &'static str,
     pub target: LocationTarget,
-    pub one_way: bool, // true = sens unique (pas de retour automatique)
+    #[allow(dead_code)]
+    pub one_way: bool,
 }
 
 // ─── LOCATION CONTENTS ───────────────────────────────────────────────────────
@@ -47,6 +48,7 @@ pub struct EnemySpawn {
     pub enemy_type: EnemyType,
     pub element: Element,
     pub count: u32,
+    #[allow(dead_code)]
     pub respawns: bool,
 }
 
@@ -96,9 +98,11 @@ pub struct Location {
 pub struct Zone {
     pub id: ZoneId,
     pub name: &'static str,
+    #[allow(dead_code)]
     pub description: &'static str,
+    #[allow(dead_code)]
     pub ascii: &'static str,
-    pub entry_location: u32, // id de la location d'entrée
+    pub entry_location: u32,
     pub locations: Vec<Location>,
 }
 

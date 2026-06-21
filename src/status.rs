@@ -60,6 +60,7 @@ impl FrostEffect {
     }
 }
 
+#[allow(dead_code)]
 pub enum Status {
     Alive,
     Dead,
@@ -87,6 +88,7 @@ impl Status {
         }
     }
 
+    #[allow(dead_code)]
     pub fn apply_stun(&mut self) {
         *self = Status::Stunned { turns_remaining: 1 };
     }

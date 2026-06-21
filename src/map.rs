@@ -29,6 +29,7 @@ impl World {
     }
 
     /// Zones accessibles depuis la zone actuelle (via transitions inter-zones).
+    #[allow(dead_code)]
     pub fn connections(&self, id: ZoneId) -> Vec<ZoneId> {
         let zone = self.get(id);
         let mut result = Vec::new();
@@ -69,6 +70,7 @@ impl World {
     }
 
     /// Trouve la zone qui contient une grâce donnée.
+    #[allow(dead_code)]
     pub fn zone_of_grace(&self, grace_id: u32) -> Option<ZoneId> {
         self.zones
             .values()
