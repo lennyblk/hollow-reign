@@ -30,11 +30,15 @@ pub enum CombatResult {
 // ─── POINT D'ENTRÉE ──────────────────────────────────────────────────────────
 
 pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> CombatResult {
-    // Construit la liste d'ennemis (max 3)
+    // Zones 1-2 : groupes jusqu'à 3. Zones suivantes : 1 seul ennemi.
+    let max_enemies = match zone {
+        ZoneId::Ashfeld | ZoneId::Gravemoor => 3,
+        _ => 1,
+    };
     let mut enemies = Vec::new();
     'build: for s in spawns {
         for _ in 0..s.count {
-            if enemies.len() >= 3 { break 'build; }
+            if enemies.len() >= max_enemies { break 'build; }
             enemies.push(spawn(zone, s.enemy_type, s.element));
         }
     }
@@ -444,7 +448,7 @@ fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w
             if let Some(line) = ascii_lines.get(row as usize) {
                 execute!(
                     out,
-                    SetForegroundColor(Color::DarkGrey),
+                    SetForegroundColor(Color::DarkRed),
                     Print(format!("{:<ascii_w$}", line)),
                     ResetColor,
                 ).ok();
