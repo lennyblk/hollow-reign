@@ -43,6 +43,7 @@ struct SaveData {
     nav_location_id:   u32,
     nav_opened_chests: Vec<u32>,
     nav_last_locations:Vec<(String, u32)>,
+    nav_killed_bosses: Vec<String>,
     // Quêtes
     active_quests:     Vec<String>,
     completed_quests:  Vec<String>,
@@ -78,6 +79,7 @@ pub fn save(player: &Player, state: &NavigationState) {
         nav_zone:           zone_to_str(state.zone).to_string(),
         nav_location_id:    state.location_id,
         nav_opened_chests:  state.opened_chests.iter().copied().collect(),
+        nav_killed_bosses:  state.killed_bosses.iter().map(|z| zone_to_str(*z).to_string()).collect(),
         active_quests:      player.active_quests.iter().cloned().collect(),
         completed_quests:   player.completed_quests.iter().cloned().collect(),
         nav_last_locations: state
@@ -147,6 +149,9 @@ pub fn load(world: &World) -> Option<(Player, NavigationState)> {
     state.zone        = zone;
     state.location_id = data.nav_location_id;
     state.opened_chests = data.nav_opened_chests.into_iter().collect::<HashSet<_>>();
+    state.killed_bosses = data.nav_killed_bosses.iter()
+        .filter_map(|s| zone_from_str(s))
+        .collect();
     for (zone_str, loc) in data.nav_last_locations {
         if let Some(z) = zone_from_str(&zone_str) {
             state.last_location.insert(z, loc);

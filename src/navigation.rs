@@ -10,6 +10,7 @@ use crossterm::{
 
 use std::collections::{HashMap, HashSet};
 
+use crate::enemy::EnemyType;
 use crate::map::World;
 use crate::zone::{LocationTarget, ZoneId};
 
@@ -22,6 +23,8 @@ pub struct NavigationState {
     pub last_location: HashMap<ZoneId, u32>,
     /// Coffres déjà ouverts (par chest_id).
     pub opened_chests: HashSet<u32>,
+    /// Zones dont le boss a été définitivement tué.
+    pub killed_bosses: HashSet<ZoneId>,
 }
 
 impl NavigationState {
@@ -33,6 +36,7 @@ impl NavigationState {
             location_id,
             last_location: HashMap::new(),
             opened_chests: HashSet::new(),
+            killed_bosses: HashSet::new(),
         }
     }
 
@@ -74,16 +78,21 @@ pub fn run_navigation(world: &World, state: &mut NavigationState) -> NavigationE
     terminal::enable_raw_mode().expect("raw mode requis");
     execute!(out, Hide).ok();
 
+    let mut flash: Option<String> = None;
     let event = loop {
-        draw(&mut out, world, state);
+        draw(&mut out, world, state, flash.as_deref());
+        flash = None;
 
         let zone = world.get(state.zone);
         let location = zone.get_location(state.location_id).unwrap();
 
         // Capture des actions disponibles ici
+        let zone_boss_dead = state.killed_bosses.contains(&state.zone);
         let has_grace = location.contents.grace.is_some();
         let has_npc = location.contents.npc.is_some();
-        let has_enemies = !location.contents.enemies.is_empty();
+        let has_enemies = location.contents.enemies.iter().any(|s| {
+            s.enemy_type != EnemyType::Boss || !zone_boss_dead
+        });
         let has_merchant = location.contents.merchant;
         let num_connections = location.connections.len();
         let chest_id = location.contents.chest.as_ref()
@@ -102,7 +111,16 @@ pub fn run_navigation(world: &World, state: &mut NavigationState) -> NavigationE
                                 state.navigate_here(id);
                             }
                             LocationTarget::OtherZone(zid) => {
-                                state.navigate_zone(world, zid);
+                                if zid == ZoneId::TheVoid
+                                    && !state.killed_bosses.contains(&state.zone)
+                                {
+                                    flash = Some(
+                                        "Vaincre le boss de cette zone pour acceder au Vide."
+                                            .to_string(),
+                                    );
+                                } else {
+                                    state.navigate_zone(world, zid);
+                                }
                             }
                         }
                     }
@@ -155,7 +173,7 @@ pub fn run_navigation(world: &World, state: &mut NavigationState) -> NavigationE
 
 // ─── RENDU ────────────────────────────────────────────────────────────────────
 
-fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState) {
+fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, flash: Option<&str>) {
     let w = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
     let zone = world.get(state.zone);
     let location = zone.get_location(state.location_id).unwrap();
@@ -245,18 +263,32 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState) {
         )
         .ok();
     }
-    if !location.contents.enemies.is_empty() {
-        let total_enemies: u32 = location.contents.enemies.iter().map(|e| e.count).sum();
-        execute!(
-            out,
-            SetForegroundColor(Color::Red),
-            Print(format!(
-                "  [Ennemis]  {} ennemi(s) en vue\r\n",
-                total_enemies
-            )),
-            ResetColor,
-        )
-        .ok();
+    {
+        let zone_boss_dead = state.killed_bosses.contains(&state.zone);
+        let has_boss_only = !location.contents.enemies.is_empty()
+            && location.contents.enemies.iter().all(|s| s.enemy_type == EnemyType::Boss);
+
+        if has_boss_only && zone_boss_dead {
+            execute!(
+                out,
+                SetForegroundColor(Color::DarkGrey),
+                Print("  [Boss]     VAINCU\r\n"),
+                ResetColor,
+            ).ok();
+        } else if !location.contents.enemies.is_empty() {
+            let live: u32 = location.contents.enemies.iter()
+                .filter(|s| s.enemy_type != EnemyType::Boss || !zone_boss_dead)
+                .map(|s| s.count)
+                .sum();
+            if live > 0 {
+                execute!(
+                    out,
+                    SetForegroundColor(Color::Red),
+                    Print(format!("  [Ennemis]  {} ennemi(s) en vue\r\n", live)),
+                    ResetColor,
+                ).ok();
+            }
+        }
     }
 
     // ── Séparateur ───────────────────────────────────────────────────────────
@@ -279,28 +311,41 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState) {
     )
     .ok();
 
+    let zone_boss_dead = state.killed_bosses.contains(&state.zone);
     for (i, conn) in location.connections.iter().enumerate() {
-        let dest_name = match conn.target {
-            LocationTarget::Here(id) => zone
-                .get_location(id)
-                .map(|l| l.name)
-                .unwrap_or("?"),
-            LocationTarget::OtherZone(zid) => zid.name(),
+        let (dest_name, locked) = match conn.target {
+            LocationTarget::Here(id) => (
+                zone.get_location(id).map(|l| l.name).unwrap_or("?"),
+                false,
+            ),
+            LocationTarget::OtherZone(zid) => {
+                let gated = zid == ZoneId::TheVoid && !zone_boss_dead;
+                (zid.name(), gated)
+            }
         };
-        execute!(
-            out,
-            SetForegroundColor(Color::White),
-            Print(format!("  ")),
-            SetForegroundColor(Color::DarkYellow),
-            SetAttribute(Attribute::Bold),
-            Print(format!("[{}]", i + 1)),
-            ResetColor,
-            Print(format!(" {}", conn.label)),
-            SetForegroundColor(Color::DarkGrey),
-            Print(format!("  ({})\r\n", dest_name)),
-            ResetColor,
-        )
-        .ok();
+        if locked {
+            execute!(
+                out,
+                SetForegroundColor(Color::DarkGrey),
+                Print(format!("  [{}] {} ", i + 1, conn.label)),
+                Print(format!("({}) [VERROU - vaincre le boss]\r\n", dest_name)),
+                ResetColor,
+            ).ok();
+        } else {
+            execute!(
+                out,
+                SetForegroundColor(Color::White),
+                Print("  "),
+                SetForegroundColor(Color::DarkYellow),
+                SetAttribute(Attribute::Bold),
+                Print(format!("[{}]", i + 1)),
+                ResetColor,
+                Print(format!(" {}", conn.label)),
+                SetForegroundColor(Color::DarkGrey),
+                Print(format!("  ({})\r\n", dest_name)),
+                ResetColor,
+            ).ok();
+        }
     }
 
     // ── Actions ──────────────────────────────────────────────────────────────
@@ -326,7 +371,11 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState) {
     if location.contents.merchant {
         actions.push(("M", "Marchand"));
     }
-    if !location.contents.enemies.is_empty() {
+    let zone_boss_dead_actions = state.killed_bosses.contains(&state.zone);
+    let has_live_enemies = location.contents.enemies.iter().any(|s| {
+        s.enemy_type != EnemyType::Boss || !zone_boss_dead_actions
+    });
+    if has_live_enemies {
         actions.push(("E", "Combattre"));
     }
     if has_chest {
@@ -349,6 +398,19 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState) {
     }
 
     execute!(out, Print("\r\n")).ok();
+
+    if let Some(msg) = flash {
+        execute!(
+            out,
+            Print("\r\n  "),
+            SetForegroundColor(Color::Red),
+            SetAttribute(Attribute::Bold),
+            Print(msg),
+            ResetColor,
+            Print("\r\n"),
+        ).ok();
+    }
+
     out.flush().ok();
 }
 

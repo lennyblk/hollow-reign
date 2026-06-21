@@ -30,6 +30,7 @@ use inventory_ui::open_inventory;
 use map::World;
 use navigation::{NavigationEvent, NavigationState, run_navigation};
 use player::Player;
+use zone::ZoneId;
 
 fn main() {
     let world = World::new();
@@ -67,15 +68,32 @@ fn main() {
                 let location = zone_data.get_location(state.location_id).unwrap();
                 let spawns = &location.contents.enemies;
                 match run_combat(&mut player, zone, spawns) {
-                    CombatResult::Victory { items, souls } => {
+                    CombatResult::Victory {
+                        items,
+                        souls,
+                        boss_killed,
+                    } => {
                         player.souls += souls;
                         let item_count = items.len();
                         for item in items {
                             player.pick_up(item);
                         }
+                        if boss_killed {
+                            state.killed_bosses.insert(state.zone);
+                            if state.zone == ZoneId::TheVoid {
+                                save::save(&player, &state);
+                                show_victory();
+                                break;
+                            }
+                        }
+                        let boss_msg = if boss_killed {
+                            "\r\n  [BOSS VAINCU] Cette zone est desormais sous votre controle.\r\n"
+                        } else {
+                            ""
+                        };
                         println!(
-                            "\r\n  Victoire ! +{} ames, {} objet(s) recupere(s).\r\n",
-                            souls, item_count
+                            "\r\n  Victoire ! +{} ames, {} objet(s) recupere(s).{}\r\n",
+                            souls, item_count, boss_msg
                         );
                         println!("  Appuie sur Entree...");
                         let mut buf = String::new();
@@ -131,6 +149,70 @@ fn main() {
             }
         }
     }
+}
+
+fn show_victory() {
+    use crossterm::{
+        cursor::{Hide, Show},
+        event::{self, Event, KeyEvent, KeyEventKind},
+        execute,
+        style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
+        terminal::{self, Clear, ClearType},
+    };
+    use std::io::{self, Write};
+
+    const ART: &[&str] = &[
+        "                                                                    ",
+        "            Le Roi Creux est mort. Hollow Reign est libre.          ",
+        "                                                                    ",
+        "                     Vous etes le nouveau Roi.                      ",
+        "                                                                    ",
+    ];
+
+    let mut out = io::stdout();
+    terminal::enable_raw_mode().ok();
+    execute!(out, Hide, Clear(ClearType::All)).ok();
+
+    let (tw, th) = terminal::size().unwrap_or((120, 30));
+    let row0 = (th.saturating_sub(ART.len() as u16 + 3)) / 2;
+
+    for (i, line) in ART.iter().enumerate() {
+        let col = (tw.saturating_sub(line.len() as u16)) / 2;
+        execute!(
+            out,
+            crossterm::cursor::MoveTo(col, row0 + i as u16),
+            SetForegroundColor(Color::DarkYellow),
+            SetAttribute(Attribute::Bold),
+            Print(line),
+            ResetColor,
+        )
+        .ok();
+    }
+
+    let hint = "[ Appuyez sur une touche pour quitter ]";
+    let hcol = (tw.saturating_sub(hint.len() as u16)) / 2;
+    execute!(
+        out,
+        crossterm::cursor::MoveTo(hcol, row0 + ART.len() as u16 + 2),
+        SetForegroundColor(Color::DarkGrey),
+        Print(hint),
+        ResetColor,
+    )
+    .ok();
+    out.flush().ok();
+
+    loop {
+        if let Ok(Event::Key(KeyEvent {
+            kind: KeyEventKind::Press,
+            ..
+        })) = event::read()
+        {
+            break;
+        }
+    }
+
+    execute!(out, Show).ok();
+    terminal::disable_raw_mode().ok();
 }
 
 fn new_game(world: &World) -> (Player, NavigationState) {

@@ -22,7 +22,7 @@ use crate::zone::{EnemySpawn, ZoneId};
 // ─── RÉSULTAT ────────────────────────────────────────────────────────────────
 
 pub enum CombatResult {
-    Victory { items: Vec<Item>, souls: u32 },
+    Victory { items: Vec<Item>, souls: u32, boss_killed: bool },
     Defeat,
     Fled,
 }
@@ -202,9 +202,13 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
 
 fn end_result(player: &Player, combat: &Combat, zone: ZoneId) -> CombatResult {
     if player.hp > 0 {
+        let boss_killed = combat.enemies.iter().any(|e| {
+            e.enemy_type == EnemyType::Boss && !e.is_alive()
+        });
         CombatResult::Victory {
             souls: combat.collect_souls(),
             items: collect_drops(combat, zone),
+            boss_killed,
         }
     } else {
         CombatResult::Defeat
