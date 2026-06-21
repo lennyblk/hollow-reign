@@ -750,7 +750,25 @@ pub fn wooden_buckler() -> Item {
         name: "Wooden Buckler".into(),
         description: "Petit bouclier rond taillé dans du chêne. Léger et maniable, idéal pour débutants ou builds axés sur la vitesse.",
         defense: 4,
-        ascii: "",
+        ascii: r#"
+          ░░▒▒▒▒░░
+       ░▒▓▓▓▒▒▒▒▒▒▒▒▒▒▒░
+     ▒▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▒░
+   ▒▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▒
+  ▓▓▒▒▒▒▒▒▒▒▒▒▒▒░▒▒▒▒▒▒▒▒▒▒▓▒
+ ▓█▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓░
+░█▓▒░░▒▒▒▒▒▒▒░░░░░▒▒▒▒▒▒▒▒▒▒▓▓
+▒▓▒▒▒▒▒▒▒▒▒▒░░   ░▒▒▒▒▒▒▒▒▒▒▒▓░
+▒▓▓▒▒▒▒▒▒▒▒░▒▒▒▒▒▒▒░▒▒▒▒▒▒▒▒▒▓▒
+▒▓▒▒▒▒▒▒▒▒▒▒▒▓███▓▒▒▒▒▒▒▒▒▒░▒▓░
+ █▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓
+ ▒█▒▒▒▒▒▒▓▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓░
+  ▓▓▒▓▓▒▒▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▒
+   ▒▓▓▓▓▓▓▓▓▓▒▒▒▒▓▓▓▓▓▓▒▒▒▓░
+     ▓▓▒▒▒▓▒▒▒▒▒▒▒▒▒▒▒▒▒▓▒
+       ▒▓▓▓▓▒▒▒▒▒▒▒▓▓▓▓░
+          ░▒▓▓▓▓▓▒▒▒░
+"#,
     })
 }
 
@@ -759,7 +777,23 @@ pub fn thornwood_shield() -> Item {
         name: "Thornwood Shield".into(),
         description: "Bouclier de bois épineux récupéré dans une forêt maudite. Les épines blessent les ennemis qui frappent trop fort.",
         defense: 9,
-        ascii: "",
+        ascii: r#"
+       ░░▒▒▒▒░▒▒▒▒▒▒▒▒▒▒░░
+     ▓▓▒▓▓▓▒▒▒▒▒▒▒▒▓▓▓▓▒▓▒
+     ▒▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▒
+     ▒▓▓▒▒░▒▒▒▒▒▒▒▒▒▒▒▒▓▓░
+     ░▒▒░▒▒▒░░▒▒▒▒▒▒▒▒▒▒▒░
+     ░▒▒▒▒▒▒▒▒░░▒▒▒▒▒▒▒▒░░
+      ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░
+      ░▒░░▒▒▒▒▒▒▒▒▒▒▒░░░
+       ░▒▒░░▒▒▒▒▒▒▒░ ░▒░
+        ░▒▓▒▒▒▒▒▒▒░▒▒░
+        ░▒▓▓▒▒▒▒▒▒▒▒▒░
+         ░▒▓▓▓▓▒▒▒▒▒░
+          ░▒▓▓▒▒▓▓▓▒░
+            ▒▓▓▓▓▓▒
+             ░▒▓▒
+"#,
     })
 }
 
@@ -768,7 +802,25 @@ pub fn iron_kite_shield() -> Item {
         name: "Iron Kite Shield".into(),
         description: "Bouclier de cavalier en forme de cerf-volant. Large et robuste, couvre le corps entier contre les attaques directes.",
         defense: 14,
-        ascii: "",
+        ascii: r#"
+              ░
+          ░▒▒▒▒░▒▓▒▒
+        ▓▓▓▓▓▒▒▒▒▓▓▓█▓▒
+       ▓██▓▓▓▒▒░▒▓▓████▓
+       ░▓▓▓▓▓▒░▓▒▓▓████▓
+         ▓▓▓▓▒░▒▒▒▓▓▓▓
+        ░▓▓▒░▒▒░▓▓▓▓██
+      ▒▓▓▓▓▒▒▒▒▒▓▓▓▓███▒
+      ▒█▓▓▓▓▒░▒▒▓▓▓████▓
+      ▒▓▓▓▓▓▒▒▒▒▓██████▓
+       ▓▓▓▓▒▒▒▒▒▓▓▓████▒
+       ▒▓▓▓▓▒▒▒▒▒▓████▓
+        ▒▓▓▓▓▒▓▓▓▓███▓
+         ▒▒▓▓▒▓▓▓▓██▓
+           ▒▒▓▓▓██▓▓
+            ░▒▓▓▓▓
+               ▒
+"#,
     })
 }
 
@@ -777,7 +829,31 @@ pub fn boneguard() -> Item {
         name: "Boneguard".into(),
         description: "Bouclier fait d'os fusionnés de créatures tombées. Étrangement résistant malgré son aspect fragile.",
         defense: 17,
-        ascii: "",
+        ascii: r#"
+
+
+              ▒▓▒
+              ▒▓
+              ▒▓
+              ▒▓░
+         ░▒░░░▒▓▓▓▓▒▒▒
+     ░ ░░▒▓▓▒▒▒▓▓▓▓██▓▒▒░░
+     ░░▓▓▓▓▒▒▒▒▒▒▓████▓▓▒▒
+    ░▒▓▓▓▒▒▒▓▒░▒▓▓██▓▓▓▓▓▒▒░
+   ░▒▓▓▒▓▓▓▓▓▒▒▓▓▓▓▒▓█▓▓▓▓▒▒
+  ░░▒▒▓▒▓▒▓░▒▒▒▓▓▓▓▓▓█▓▓▓▓▓▒▒
+  ░▒▒▓▒▒▒▒▒▓▒▒▓▓▒▓▓▓▓▓▓▓▓▓▓▒▒
+  ░░▒▓▒▒▒▓▓▒▓▓▒▒▓▒▓█▓▒▓▓▓▓▓▒▒░
+  ░░▒▒▒▒▓██▓▓▓▒▓█▓███▓▓▓▓▓▓▒▒
+   ░▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓█▓▓▓▓▓▓▒▒
+    ░▒█▓█▓▓▓▒▓▓▓▓▓▒▓▓▓▓▓▓▒▒
+     ░▒▓▓▓▓▓▒▓▒▓▓▓▓███▓▒▒░
+      ░▒▒▒▓▓█▓▒▒▓▒▓▓▓▒▒░ ░
+          ▒▓▓▒▓▒▓▒▒▒▓░
+              ░▒░
+               ░
+
+"#,
     })
 }
 
@@ -786,54 +862,28 @@ pub fn ashen_bulwark() -> Item {
         name: "Ashen Bulwark".into(),
         description: "Bouclier de métal noirci par la cendre volcanique. Résiste particulièrement bien aux attaques de feu.",
         defense: 20,
-        ascii: "",
+        ascii: r#"
+
+
+                   ░░
+    ░░░▒▒▒▒▓▓▓▒▓▓▓███▓
+     ▒▓█████████████████   ▓▒
+     █████████████████████▓▓█
+     ▓████████▓▓▓▒▒███▓▓████
+     ▓██████  ▒▓▓▓▓▓███████
+     ▓█████▓▒░▓▒▓▓▒█▓████████
+     ███████▓░░▒░▒▓▓█████████
+  ░▒▓██████▓█▓▒████▓█▓▓███████
+   ▓█████████▓█░██░▒▓█▓████████
+      █████████▓████▓ █▓███████
+         █████████▓▒▓██░░██████
+        █████████████▒█▓▒░ ████
+       ▓███  █████████████▓████
+                 ██████████████
+"#,
     })
 }
 
-pub fn ghostveil() -> Item {
-    Item::Shield(ShieldData {
-        name: "Ghostveil".into(),
-        description: "Bouclier semi-translucide fait d'énergie spectrales solidifiées. Léger comme une plume, absorbe les dégâts magiques avec efficacité.",
-        defense: 12,
-        ascii: "",
-    })
-}
-
-pub fn runed_aegis() -> Item {
-    Item::Shield(ShieldData {
-        name: "Runed Aegis".into(),
-        description: "Aegis gravée de runes de protection ancienne. Les runes brillent faiblement lorsque le bouclier absorbe un coup.",
-        defense: 22,
-        ascii: "",
-    })
-}
-
-pub fn stormwall() -> Item {
-    Item::Shield(ShieldData {
-        name: "Stormwall".into(),
-        description: "Grand bouclier chargé d'électricité statique. Les frapper déclenche parfois une décharge sur l'attaquant.",
-        defense: 27,
-        ascii: "",
-    })
-}
-
-pub fn tower_shield() -> Item {
-    Item::Shield(ShieldData {
-        name: "Tower Shield".into(),
-        description: "Bouclier tour massif couvrant presque tout le corps. Extrêmement lourd — prévu pour les guerriers à force maximale.",
-        defense: 32,
-        ascii: "",
-    })
-}
-
-pub fn soulward() -> Item {
-    Item::Shield(ShieldData {
-        name: "Soulward".into(),
-        description: "Bouclier forgé de l'essence d'âmes condensées. La protection ultime — chaque âme absorbée renforce sa résistance.",
-        defense: 38,
-        ascii: "",
-    })
-}
 
 // ─── CONSUMABLES ────────────────────────────────────────────────────────────
 
