@@ -61,6 +61,7 @@ pub enum NavigationEvent {
     TalkToNpc(&'static str),
     EnterCombat,
     OpenChest(u32),
+    OpenInventory,
     Quit,
 }
 
@@ -122,6 +123,10 @@ pub fn run_navigation(world: &World, state: &mut NavigationState) -> NavigationE
                 // Combat
                 KeyCode::Char('e') | KeyCode::Char('E') if has_enemies => {
                     break NavigationEvent::EnterCombat;
+                }
+                // Inventaire (toujours disponible)
+                KeyCode::Char('i') | KeyCode::Char('I') => {
+                    break NavigationEvent::OpenInventory;
                 }
                 // Quitter
                 KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
@@ -313,6 +318,7 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState) {
     if has_chest {
         actions.push(("C", "Coffre"));
     }
+    actions.push(("I", "Inventaire"));
     actions.push(("Q", "Quitter"));
 
     for (key, label) in &actions {

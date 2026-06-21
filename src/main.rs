@@ -6,6 +6,7 @@ mod enemy;
 mod enemy_catalog;
 mod equipment;
 mod grace;
+mod inventory_ui;
 mod item;
 mod map;
 mod navigation;
@@ -19,6 +20,8 @@ mod zone;
 use class::Class;
 use combat_ui::{CombatResult, run_combat};
 use enemy_catalog::open_chest;
+use equipment::Equipment;
+use inventory_ui::{open_inventory, InventoryResult};
 use map::World;
 use navigation::{NavigationEvent, NavigationState, run_navigation};
 use player::Player;
@@ -28,6 +31,7 @@ fn main() {
     let mut state = NavigationState::new(&world);
     let mut player = Player::new("Héros".to_string(), Class::Knight);
     player.hp = player.stats.max_hp();
+    player.equipment.push(Equipment::empty());
 
     loop {
         match run_navigation(&world, &mut state) {
@@ -87,6 +91,10 @@ fn main() {
                 println!("\r\n  Appuie sur Entree...");
                 let mut buf = String::new();
                 std::io::stdin().read_line(&mut buf).ok();
+            }
+            NavigationEvent::OpenInventory => {
+                let mut out = std::io::stdout();
+                open_inventory(&mut out, &mut player, false);
             }
             NavigationEvent::Quit => {
                 println!("\r\n  Au revoir.\r\n");

@@ -12,6 +12,7 @@ use crossterm::{
 use crate::combat::Combat;
 use crate::enemy::EnemyType;
 use crate::enemy_catalog::{drops, spawn};
+use crate::inventory_ui::{open_inventory, InventoryResult};
 use crate::item::{Element, Item};
 use crate::phrases::{Difficulty, PhrasePool};
 use crate::player::Player;
@@ -120,6 +121,19 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                         player.use_estus();
                         push_log(&mut log, "Tu bois une fiole d'estus.".to_string());
                         break 'input;
+                    }
+                    // Inventaire plein écran — ne consomme le tour QUE si consommable utilisé
+                    KeyCode::Char('i') | KeyCode::Char('I') => {
+                        // open_inventory gère son propre raw mode (enable + disable)
+                        let inv_result = open_inventory(&mut out, player, false);
+                        // Il a désactivé raw mode — on réactive pour le combat
+                        terminal::enable_raw_mode().ok();
+                        execute!(out, Hide).ok();
+                        // Redessine le combat par-dessus
+                        draw_combat(&mut out, player, &combat, &log, combat.turn);
+                        if let InventoryResult::ConsumedItem = inv_result {
+                            break 'input;
+                        }
                     }
                     // Fuite
                     KeyCode::Char('f') | KeyCode::Char('F') => {
@@ -380,6 +394,7 @@ fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[St
     print_action(out, "A", "Attaquer", true);
     print_action(out, "S", "Special", combat.player_elemental_cooldown == 0);
     print_action(out, "H", &format!("Estus ({})", player.estus_charges), player.estus_charges > 0);
+    print_action(out, "I", "Inventaire", true);
     print_action(out, "F", "Fuir", true);
     execute!(out, Print("\r\n")).ok();
 
