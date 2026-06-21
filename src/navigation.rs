@@ -19,7 +19,7 @@ pub struct NavigationState {
     pub zone: ZoneId,
     pub location_id: u32,
     /// Dernière location visitée par zone (pour le retour).
-    last_location: HashMap<ZoneId, u32>,
+    pub last_location: HashMap<ZoneId, u32>,
     /// Coffres déjà ouverts (par chest_id).
     pub opened_chests: HashSet<u32>,
 }
@@ -62,6 +62,7 @@ pub enum NavigationEvent {
     EnterCombat,
     OpenChest(u32),
     OpenInventory,
+    Save,
     Quit,
 }
 
@@ -127,6 +128,10 @@ pub fn run_navigation(world: &World, state: &mut NavigationState) -> NavigationE
                 // Inventaire (toujours disponible)
                 KeyCode::Char('i') | KeyCode::Char('I') => {
                     break NavigationEvent::OpenInventory;
+                }
+                // Sauvegarde manuelle
+                KeyCode::Char('s') | KeyCode::Char('S') => {
+                    break NavigationEvent::Save;
                 }
                 // Quitter
                 KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
@@ -319,6 +324,7 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState) {
         actions.push(("C", "Coffre"));
     }
     actions.push(("I", "Inventaire"));
+    actions.push(("S", "Sauvegarder"));
     actions.push(("Q", "Quitter"));
 
     for (key, label) in &actions {

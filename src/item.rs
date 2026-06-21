@@ -110,6 +110,7 @@ pub enum ConsumableEffect {
     DealFireDamage(u32),
     BuffAttack { bonus: u32, turns: u32 },
     QuestItem,
+    ShowMap,
 }
 
 pub struct ConsumableData {

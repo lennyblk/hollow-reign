@@ -1121,11 +1121,57 @@ pub fn grounding_wrap() -> Item {
     })
 }
 
+/// Reconstruit un item depuis son nom exact (utilisé par le système de sauvegarde).
+pub fn item_by_name(name: &str) -> Option<Item> {
+    match name {
+        // Armes
+        "Worn Shortsword"   => Some(worn_shortsword()),
+        "Hunter's Blade"    => Some(hunters_blade()),
+        "Silverwind Rapier" => Some(silverwind_rapier()),
+        "Ashfall Katana"    => Some(ashfall_katana()),
+        "Dawnbreaker"       => Some(dawnbreaker()),
+        "Ironwood Club"     => Some(ironwood_club()),
+        "Gravecrusher"      => Some(gravecrusher()),
+        "Sundermaul"        => Some(sundermaul()),
+        "Voidstaff"         => Some(voidstaff()),
+        "Runebreaker"       => Some(runebreaker()),
+        // Armures
+        "Tattered Rags"      => Some(tattered_rags()),
+        "Pilgrim's Coat"     => Some(pilgrims_coat()),
+        "Leather Vest"       => Some(leather_vest()),
+        "Shadowweave Mantle" => Some(shadowweave_mantle()),
+        "Ashcaster Robes"    => Some(ashcaster_robes()),
+        "Chainmail"          => Some(chainmail()),
+        "Warden's Harness"   => Some(wardens_harness()),
+        "Knight's Plate"     => Some(knights_plate()),
+        "Hollowed Armor"     => Some(hollowed_armor()),
+        "Wraithplate"        => Some(wraithplate()),
+        // Boucliers
+        "Wooden Buckler"   => Some(wooden_buckler()),
+        "Thornwood Shield" => Some(thornwood_shield()),
+        "Iron Kite Shield" => Some(iron_kite_shield()),
+        "Boneguard"        => Some(boneguard()),
+        "Ashen Bulwark"    => Some(ashen_bulwark()),
+        // Consommables
+        "Antidote"           => Some(antidote()),
+        "Frost Salts"        => Some(frost_salts()),
+        "Throwing Knife"     => Some(throwing_knife()),
+        "Siege Ash"          => Some(siege_ash()),
+        "Haste Draught"      => Some(haste_draught()),
+        "Bandage"            => Some(bandage()),
+        "Cooling Salve"      => Some(cooling_salve()),
+        "Purifying Salt"     => Some(purifying_salt()),
+        "Grounding Wrap"     => Some(grounding_wrap()),
+        "Fragment de Carte"  => Some(map_fragment()),
+        _                    => None,
+    }
+}
+
 pub fn map_fragment() -> Item {
     Item::Consumable(ConsumableData {
-        name: "Torn Map Fragment".into(),
-        description: "Morceau de parchemin arraché d'une carte plus grande. Quelqu'un cherche peut-être ce qu'il révèle.",
-        effect: ConsumableEffect::QuestItem,
+        name: "Fragment de Carte".into(),
+        description: "Parchemin froisse representant les terres d'Hollow Reign jusqu'au Vide. Utilisez-le pour voir la carte complète.",
+        effect: ConsumableEffect::ShowMap,
         ascii: r#"
                █▓▓▓▓
             ▓▓▓▓▒▒▒▒▓▓

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::class::Class;
 use crate::equipment::Equipment;
 use crate::item::{ConsumableEffect, Item};
@@ -35,6 +37,8 @@ pub struct Player {
     pub lightning: LightningEffect,
     pub estus_charges: u32,
     pub last_grace: Option<u32>,
+    pub active_quests: HashSet<String>,
+    pub completed_quests: HashSet<String>,
 }
 
 impl Player {
@@ -60,6 +64,8 @@ impl Player {
             lightning: FrostEffect::new(),
             estus_charges: 1,
             last_grace: None,
+            active_quests: HashSet::new(),
+            completed_quests: HashSet::new(),
         }
     }
 
@@ -195,7 +201,8 @@ impl Player {
             ConsumableEffect::DealDamage(_)
             | ConsumableEffect::DealFireDamage(_)
             | ConsumableEffect::BuffAttack { .. }
-            | ConsumableEffect::QuestItem => false,
+            | ConsumableEffect::QuestItem
+            | ConsumableEffect::ShowMap => false,
         }
     }
 
