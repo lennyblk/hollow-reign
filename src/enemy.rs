@@ -3,6 +3,7 @@ use crate::status::{ElementalEffect, FrostEffect, Status};
 
 type LightningEffect = FrostEffect;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EnemyType {
     Mob,
     MobLeader,

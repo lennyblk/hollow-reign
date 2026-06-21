@@ -1,15 +1,18 @@
 mod catalog;
+mod enemy_catalog;
 mod class;
 mod combat;
 mod enemy;
 mod equipment;
 mod grace;
 mod item;
+mod map;
 mod phrases;
 mod player;
-mod typing;
 mod stats;
 mod status;
+mod typing;
+mod zone;
 
 use phrases::{Difficulty, PhrasePool};
 use typing::{perfect_threshold, time_limit_ms, typing_challenge};

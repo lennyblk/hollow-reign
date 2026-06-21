@@ -14,6 +14,7 @@ pub enum StatScaling {
 
 /// Cycle : Fire → Ice → Lightning → Bleed → Poison → Rot → Fire
 /// Chaque élément bat le suivant (+50% dmg), faible contre le précédent (-25% dmg).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Element {
     Fire,
     Ice,
