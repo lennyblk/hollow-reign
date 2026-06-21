@@ -1,4 +1,5 @@
 mod catalog;
+mod intro_ui;
 mod class;
 mod combat;
 mod combat_ui;
@@ -37,8 +38,16 @@ fn main() {
 
     let has_save = save::save_exists();
     let (mut player, mut state) = match start_menu(has_save) {
-        StartChoice::Continue => save::load(&world).unwrap_or_else(|| new_game(&world)),
-        StartChoice::NewGame => new_game(&world),
+        StartChoice::Continue => save::load(&world).unwrap_or_else(|| {
+            let class = intro_ui::class_select();
+            intro_ui::show_intro();
+            new_game(&world, class)
+        }),
+        StartChoice::NewGame => {
+            let class = intro_ui::class_select();
+            intro_ui::show_intro();
+            new_game(&world, class)
+        }
     };
 
     loop {
@@ -222,8 +231,8 @@ fn show_victory() {
     terminal::disable_raw_mode().ok();
 }
 
-fn new_game(world: &World) -> (Player, NavigationState) {
-    let mut player = Player::new("Héros".to_string(), Class::Rogue);
+fn new_game(world: &World, class: Class) -> (Player, NavigationState) {
+    let mut player = Player::new("Héros".to_string(), class);
     player.hp = player.stats.max_hp();
     player.equipment.push(Equipment::empty());
     let state = NavigationState::new(world);
