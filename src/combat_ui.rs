@@ -441,15 +441,28 @@ fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w
             }
 
             let ascii_lines: Vec<&str> = e.ascii.lines().collect();
-            let ascii_w = ascii_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+            // Strip padding commun pour éviter overflow
+            let min_indent = ascii_lines.iter()
+                .filter(|l| !l.trim().is_empty())
+                .map(|l| l.len() - l.trim_start().len())
+                .min()
+                .unwrap_or(0);
+            let max_art_w = col_w.saturating_sub(4); // marge stats
+            let ascii_w = ascii_lines.iter()
+                .map(|l| if l.len() >= min_indent { l[min_indent..].chars().count() } else { 0 })
+                .max()
+                .unwrap_or(0)
+                .min(max_art_w);
             let elems: String = e.elements.iter().map(|el| element_label(el)).collect::<Vec<_>>().join("/");
 
             // Colonne ASCII
             if let Some(line) = ascii_lines.get(row as usize) {
+                let stripped = if line.len() >= min_indent { &line[min_indent..] } else { line };
+                let clipped: String = stripped.chars().take(ascii_w).collect();
                 execute!(
                     out,
                     SetForegroundColor(Color::DarkRed),
-                    Print(format!("{:<ascii_w$}", line)),
+                    Print(format!("{:<ascii_w$}", clipped)),
                     ResetColor,
                 ).ok();
             } else if ascii_w > 0 {

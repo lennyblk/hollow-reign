@@ -367,6 +367,18 @@ fn start_menu(has_save: bool) -> StartChoice {
         )
         .ok();
 
+        // Volume reminder
+        let vol = "♪ Volume up";
+        let vcol = (tw.saturating_sub(vol.len() as u16)) / 2;
+        execute!(
+            out,
+            MoveTo(vcol, menu_row + options.len() as u16 + 3),
+            SetForegroundColor(Color::DarkGrey),
+            Print(vol),
+            ResetColor,
+        )
+        .ok();
+
         out.flush().ok();
 
         if let Ok(Event::Key(KeyEvent {
