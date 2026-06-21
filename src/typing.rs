@@ -15,9 +15,9 @@ use crate::phrases::Difficulty;
 
 pub fn time_limit_ms(diff: &Difficulty) -> u64 {
     match diff {
-        Difficulty::Short => 5_000,
-        Difficulty::Medium => 10_000,
-        Difficulty::Long => 18_000,
+        Difficulty::Short => 4_000,
+        Difficulty::Medium => 7_000,
+        Difficulty::Long => 14_000,
     }
 }
 
@@ -64,7 +64,9 @@ pub fn typing_challenge(phrase: &str, limit_ms: u64, perfect_pct: u64) -> ParryR
         let remaining = limit.saturating_sub(start.elapsed());
         if event::poll(remaining.min(Duration::from_millis(80))).unwrap_or(false) {
             if let Ok(Event::Key(key)) = event::read() {
-                if key.kind != KeyEventKind::Press { continue; }
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
                 match key.code {
                     KeyCode::Char(c) => {
                         if c == chars[typed] {
