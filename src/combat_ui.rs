@@ -406,6 +406,34 @@ fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[St
     print_action(out, "F", "Fuir", true);
     execute!(out, Print("\r\n")).ok();
 
+    // ── Cycle élémentaire ─────────────────────────────────────────────────────
+    execute!(
+        out,
+        SetForegroundColor(Color::DarkGrey),
+        Print("  Cycle : "),
+        ResetColor,
+    ).ok();
+    let cycle = [
+        ("Feu",         Color::Red),
+        ("Glace",       Color::Cyan),
+        ("Foudre",      Color::Yellow),
+        ("Saignement",  Color::DarkRed),
+        ("Poison",      Color::Green),
+        ("Pourriture",  Color::DarkGreen),
+    ];
+    for (i, (name, color)) in cycle.iter().enumerate() {
+        execute!(out, SetForegroundColor(*color), Print(name), ResetColor).ok();
+        if i < cycle.len() - 1 {
+            execute!(out, SetForegroundColor(Color::DarkGrey), Print(" > "), ResetColor).ok();
+        }
+    }
+    execute!(
+        out,
+        SetForegroundColor(Color::DarkGrey),
+        Print(" > Feu   (+50% / -25%)\r\n"),
+        ResetColor,
+    ).ok();
+
     out.flush().ok();
 }
 

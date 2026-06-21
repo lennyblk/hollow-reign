@@ -226,6 +226,8 @@ fn item_stat_lines(item: &Item) -> Vec<(&'static str, String)> {
                 ("Degats base", w.base_damage.to_string()),
                 ("Scaling",     scaling.to_string()),
                 ("Deux mains",  if w.two_handed { "Oui" } else { "Non" }.to_string()),
+                ("Element",     w.element.label().to_string()),
+                ("Capacite",    w.ability.name.to_string()),
             ]
         }
         Item::Armor(a)      => vec![("Defense", a.defense.to_string())],

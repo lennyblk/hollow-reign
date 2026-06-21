@@ -132,15 +132,10 @@ fn main() {
             }
             NavigationEvent::OpenChest(id) => {
                 let items = open_chest(id);
-                println!("\r\n  [Coffre] Ouvert !");
                 for item in items {
-                    let name = item.name();
-                    println!("    + {}", name);
+                    show_chest_item(&item);
                     player.pick_up(item);
                 }
-                println!("\r\n  Appuie sur Entree...");
-                let mut buf = String::new();
-                std::io::stdin().read_line(&mut buf).ok();
             }
             NavigationEvent::Save => {
                 save::save(&player, &state);
@@ -165,6 +160,97 @@ fn main() {
             }
         }
     }
+}
+
+fn show_chest_item(item: &item::Item) {
+    use crossterm::{
+        cursor::{Hide, Show},
+        event::{self, Event, KeyEvent, KeyEventKind},
+        execute,
+        style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
+        terminal::{self, Clear, ClearType},
+    };
+    use std::io::{self, Write};
+
+    let mut out = io::stdout();
+    terminal::enable_raw_mode().ok();
+    execute!(out, Hide, Clear(ClearType::All)).ok();
+
+    let (tw, th) = terminal::size().unwrap_or((120, 30));
+
+    // En-tête
+    let header = "  Coffre ouvert  ";
+    let bar = "═".repeat((tw as usize).saturating_sub(header.len() + 4));
+    execute!(
+        out,
+        SetForegroundColor(Color::DarkYellow),
+        SetAttribute(Attribute::Bold),
+        crossterm::cursor::MoveTo(0, 0),
+        Print(format!("══{}{}══\r\n", header, bar)),
+        ResetColor,
+    ).ok();
+
+    let ascii = item.ascii();
+    let ascii_lines: Vec<&str> = ascii.lines().collect();
+
+    // Strip indent commun
+    let min_indent = ascii_lines.iter()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.len() - l.trim_start().len())
+        .min()
+        .unwrap_or(0);
+    let stripped: Vec<&str> = ascii_lines.iter()
+        .map(|l| if l.len() >= min_indent { &l[min_indent..] } else { l })
+        .collect();
+
+    let art_w = stripped.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+    let art_h = stripped.len() as u16;
+    let col = (tw.saturating_sub(art_w as u16)) / 2;
+    let row0 = (th.saturating_sub(art_h + 5)) / 2;
+
+    // ASCII art centré
+    for (i, line) in stripped.iter().enumerate() {
+        execute!(
+            out,
+            crossterm::cursor::MoveTo(col, row0 + i as u16),
+            SetForegroundColor(Color::DarkYellow),
+            Print(line),
+            ResetColor,
+        ).ok();
+    }
+
+    // Nom de l'item
+    let name = item.name();
+    let ncol = (tw.saturating_sub(name.len() as u16)) / 2;
+    execute!(
+        out,
+        crossterm::cursor::MoveTo(ncol, row0 + art_h + 1),
+        SetForegroundColor(Color::White),
+        SetAttribute(Attribute::Bold),
+        Print(name),
+        ResetColor,
+    ).ok();
+
+    // Hint
+    let hint = "[ Appuyez sur une touche ]";
+    let hcol = (tw.saturating_sub(hint.len() as u16)) / 2;
+    execute!(
+        out,
+        crossterm::cursor::MoveTo(hcol, row0 + art_h + 3),
+        SetForegroundColor(Color::DarkGrey),
+        Print(hint),
+        ResetColor,
+    ).ok();
+    out.flush().ok();
+
+    loop {
+        if let Ok(Event::Key(KeyEvent { kind: KeyEventKind::Press, .. })) = event::read() {
+            break;
+        }
+    }
+
+    execute!(out, Show).ok();
+    terminal::disable_raw_mode().ok();
 }
 
 fn show_victory() {

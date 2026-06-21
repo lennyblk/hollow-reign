@@ -40,6 +40,17 @@ impl Element {
         )
     }
 
+    pub fn label(&self) -> &'static str {
+        match self {
+            Element::Fire      => "Feu",
+            Element::Ice       => "Glace",
+            Element::Lightning => "Foudre",
+            Element::Bleed     => "Saignement",
+            Element::Poison    => "Poison",
+            Element::Rot       => "Pourriture",
+        }
+    }
+
     /// Multiplicateur de dégâts élémentaires : attaquant vs défenseur.
     pub fn multiplier_against(&self, defender: &Element) -> f32 {
         if self.beats(defender) {
