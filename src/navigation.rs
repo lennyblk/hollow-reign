@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
 use crossterm::{
-    cursor::{Hide, MoveTo, Show},
+    cursor::{Hide, MoveTo, Show, position as cursor_pos},
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     execute,
     style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
@@ -12,6 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::enemy::EnemyType;
 use crate::map::World;
+use crate::player::Player;
 use crate::zone::{LocationTarget, ZoneId};
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
@@ -76,14 +77,14 @@ pub enum NavigationEvent {
 
 // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
 
-pub fn run_navigation(world: &World, state: &mut NavigationState) -> NavigationEvent {
+pub fn run_navigation(world: &World, state: &mut NavigationState, player: &Player) -> NavigationEvent {
     let mut out = io::stdout();
     terminal::enable_raw_mode().expect("raw mode requis");
     execute!(out, Hide).ok();
 
     let mut flash: Option<String> = None;
     let event = loop {
-        draw(&mut out, world, state, flash.as_deref());
+        draw(&mut out, world, state, player, flash.as_deref());
         flash = None;
 
         let zone = world.get(state.zone);
@@ -177,7 +178,7 @@ pub fn run_navigation(world: &World, state: &mut NavigationState) -> NavigationE
 
 // ─── RENDU ────────────────────────────────────────────────────────────────────
 
-fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, flash: Option<&str>) {
+fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, player: &Player, flash: Option<&str>) {
     let w = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
     let zone = world.get(state.zone);
     let location = zone.get_location(state.location_id).unwrap();
@@ -200,10 +201,12 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, flash: Opt
     if !location.ascii.is_empty() {
         execute!(out, Print("\r\n")).ok();
         for line in location.ascii.lines() {
+            let line_w = line.chars().count();
+            let pad = if w > line_w { (w - line_w) / 2 } else { 0 };
             execute!(
                 out,
                 SetForegroundColor(Color::DarkGrey),
-                Print(format!("  {}\r\n", line)),
+                Print(format!("{}{}\r\n", " ".repeat(pad), line)),
                 ResetColor,
             )
             .ok();
@@ -430,8 +433,97 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, flash: Opt
         ).ok();
     }
 
+    out.flush().ok();
+    let start_row = cursor_pos().map(|(_, r)| r + 1).unwrap_or(20);
+    draw_player_panel(out, player, w, start_row);
     draw_zone_map(out, world, state);
     out.flush().ok();
+}
+
+// ─── PANNEAU JOUEUR ──────────────────────────────────────────────────────────
+
+fn draw_player_panel(out: &mut io::Stdout, player: &Player, _w: usize, start_row: u16) {
+    let (tw, _th) = terminal::size().unwrap_or((120, 35));
+
+    let panel_row = start_row;
+    let pc = player.class.color();
+    let mid = (tw / 2) as usize;
+    let art_lines: Vec<&str> = player.class.ascii().lines().collect();
+    let panel_h = art_lines.len().max(4) as u16;
+    let art_w = art_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0).min(mid.saturating_sub(4));
+    let stats_col = (art_w + 6) as u16;
+    let right_col = (mid + 2) as u16;
+
+    let s = &player.stats;
+    let max_hp = s.max_hp();
+
+    for i in 0..panel_h {
+        let row = panel_row + i;
+        let idx = i as usize;
+
+        // ── ASCII joueur (gauche) ────────────────────────────────────────────
+        execute!(out, MoveTo(2, row)).ok();
+        let line = art_lines.get(idx).copied().unwrap_or("");
+        let clipped: String = line.chars().take(art_w).collect();
+        execute!(out,
+            SetForegroundColor(pc), SetAttribute(Attribute::Bold),
+            Print(format!("{:<art_w$}", clipped)), ResetColor).ok();
+
+        // ── Stats gauche (col stats_col) ─────────────────────────────────────
+        execute!(out, MoveTo(stats_col, row)).ok();
+        match idx {
+            0 => { execute!(out, SetForegroundColor(Color::White), SetAttribute(Attribute::Bold),
+                Print(&player.name), ResetColor,
+                SetForegroundColor(Color::DarkGrey), Print(format!("  Niv.{}", player.level)), ResetColor).ok(); }
+            1 => {
+                let filled = if max_hp == 0 { 0 } else { (player.hp as usize * 12 / max_hp as usize).min(12) };
+                let bar: String = "█".repeat(filled) + &"░".repeat(12 - filled);
+                let hp_c = if player.hp * 100 / max_hp.max(1) > 60 { Color::Green }
+                    else if player.hp * 100 / max_hp.max(1) > 30 { Color::Yellow } else { Color::Red };
+                execute!(out, SetForegroundColor(hp_c),
+                    Print(format!("PV [{bar}] {}/{}", player.hp, max_hp)), ResetColor).ok();
+            }
+            2 => { execute!(out, SetForegroundColor(Color::Yellow),
+                Print(format!("Estus {}/{}   ", player.estus_charges, player.max_estus())),
+                SetForegroundColor(Color::DarkYellow), Print(format!("◈ {} ames", player.souls)),
+                ResetColor).ok(); }
+            3 => { execute!(out, SetForegroundColor(Color::DarkGrey),
+                Print(format!("Vig:{} For:{} Dex:{} Int:{} Foi:{} Arc:{} Esp:{}",
+                    s.vigor, s.strength, s.dexterity, s.intelligence, s.faith, s.arcane, s.mind)),
+                ResetColor).ok(); }
+            _ => {}
+        }
+
+        // ── Équipement (droite, col right_col) ───────────────────────────────
+        if let Some(equip) = player.equipment.first() {
+            execute!(out, MoveTo(right_col, row)).ok();
+            match idx {
+                0 => {
+                    let name = equip.weapon.as_ref().map(|i| i.name()).unwrap_or("— aucune");
+                    execute!(out, SetForegroundColor(Color::DarkGrey), Print("Arme  : "),
+                        SetForegroundColor(Color::White), Print(name), ResetColor).ok();
+                }
+                1 => {
+                    let name = equip.armor.as_ref().map(|i| i.name()).unwrap_or("— aucune");
+                    execute!(out, SetForegroundColor(Color::DarkGrey), Print("Armure: "),
+                        SetForegroundColor(Color::White), Print(name), ResetColor).ok();
+                }
+                2 => {
+                    let name = equip.shield.as_ref().map(|i| i.name()).unwrap_or("— aucun");
+                    execute!(out, SetForegroundColor(Color::DarkGrey), Print("Bouclier: "),
+                        SetForegroundColor(Color::White), Print(name), ResetColor).ok();
+                }
+                3 => {
+                    if !equip.consumables.is_empty() {
+                        let names: Vec<&str> = equip.consumables.iter().map(|i| i.name()).collect();
+                        execute!(out, SetForegroundColor(Color::DarkGrey), Print("Conso: "),
+                            SetForegroundColor(Color::White), Print(names.join(", ")), ResetColor).ok();
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 // ─── MINI-MAP ────────────────────────────────────────────────────────────────

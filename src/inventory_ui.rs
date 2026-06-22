@@ -319,11 +319,12 @@ fn draw_fullscreen(
     ).ok();
 
     // ── Colonne gauche : ASCII joueur ─────────────────────────────────────────
+    let pc = player.class.color();
     for (i, line) in player.class.ascii().lines().enumerate() {
         execute!(
             out,
             MoveTo(2, START_ROW + i as u16),
-            SetForegroundColor(Color::Cyan),
+            SetForegroundColor(pc),
             SetAttribute(Attribute::Bold),
             Print(line),
             ResetColor,

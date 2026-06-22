@@ -75,11 +75,11 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
         }
 
         // ── Tour du joueur ────────────────────────────────────────────────────
-        draw_combat(&mut out, player, &combat, &log, combat.turn);
+        draw_combat(&mut out, player, &combat, &log, combat.turn, zone);
 
         if !player.status.can_act() {
             push_log(&mut log, "Tu es immobilise — tour passe.".to_string());
-            draw_combat(&mut out, player, &combat, &log, combat.turn);
+            draw_combat(&mut out, player, &combat, &log, combat.turn, zone);
         } else { 'input: loop {
             if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
                 match code {
@@ -137,7 +137,7 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                         terminal::enable_raw_mode().ok();
                         execute!(out, Hide).ok();
                         // Redessine le combat par-dessus
-                        draw_combat(&mut out, player, &combat, &log, combat.turn);
+                        draw_combat(&mut out, player, &combat, &log, combat.turn, zone);
                         if let InventoryResult::ConsumedItem = inv_result {
                             break 'input;
                         }
@@ -196,7 +196,7 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
     };
 
     // Affiche l'état final 1.5s
-    draw_combat(&mut out, player, &combat, &log, combat.turn);
+    draw_combat(&mut out, player, &combat, &log, combat.turn, zone);
     std::thread::sleep(Duration::from_millis(1_500));
 
     execute!(out, Show).ok();
@@ -300,6 +300,17 @@ fn base_damage(player: &Player) -> u32 {
     5 + player.stats.strength + player.stats.dexterity / 2
 }
 
+fn zone_enemy_color(zone: ZoneId) -> Color {
+    match zone {
+        ZoneId::Ashfeld    => Color::Rgb { r: 180, g: 40,  b: 40  }, // saignement
+        ZoneId::Gravemoor  => Color::Rgb { r: 60,  g: 180, b: 60  }, // poison
+        ZoneId::Rotwood    => Color::Rgb { r: 100, g: 140, b: 30  }, // pourriture
+        ZoneId::TheCinders => Color::Rgb { r: 220, g: 100, b: 20  }, // feu
+        ZoneId::Frostveil  => Color::Rgb { r: 60,  g: 200, b: 220 }, // glace
+        ZoneId::TheVoid    => Color::Rgb { r: 150, g: 40,  b: 200 }, // void
+    }
+}
+
 fn enemy_difficulty(et: EnemyType) -> Difficulty {
     match et {
         EnemyType::Mob => Difficulty::Short,
@@ -354,17 +365,19 @@ fn element_label(e: &Element) -> &'static str {
 
 // ─── RENDU ───────────────────────────────────────────────────────────────────
 
-fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[String], turn: u32) {
+fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[String], turn: u32, zone: ZoneId) {
     let (tw, _) = terminal::size().unwrap_or((80, 24));
     let w = tw as usize;
     execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
+
+    let ec = zone_enemy_color(zone);
 
     // ── En-tête ───────────────────────────────────────────────────────────────
     let header = format!("  Combat — Tour {}  ", turn);
     let bar_len = w.saturating_sub(header.len() + 4);
     execute!(
         out,
-        SetForegroundColor(Color::DarkRed),
+        SetForegroundColor(ec),
         SetAttribute(Attribute::Bold),
         Print(format!("══{}{}══\r\n\r\n", header, "═".repeat(bar_len))),
         ResetColor,
@@ -372,9 +385,9 @@ fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[St
 
     // ── Affichage combattants ─────────────────────────────────────────────────
     let next_row = if combat.enemies.len() == 1 {
-        draw_1v1_side_by_side(out, player, &combat.enemies[0], combat, 2, w)
+        draw_1v1_side_by_side(out, player, &combat.enemies[0], combat, 2, w, ec)
     } else {
-        let nr = draw_enemies_columns(out, combat, 2, w);
+        let nr = draw_enemies_columns(out, combat, 2, w, ec);
         execute!(out, MoveTo(0, nr)).ok();
         separator(out, w);
         draw_player_block(out, player, combat);
@@ -444,7 +457,7 @@ fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[St
 
 /// Affiche tous les ennemis côte à côte en colonnes égales.
 /// Retourne la prochaine ligne libre après le bloc ennemis.
-fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w: usize) -> u16 {
+fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w: usize, ec: Color) -> u16 {
     let n = combat.enemies.len();
     if n == 0 { return start_row; }
 
@@ -494,7 +507,7 @@ fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w
                 let clipped: String = stripped.chars().take(ascii_w).collect();
                 execute!(
                     out,
-                    SetForegroundColor(Color::DarkRed),
+                    SetForegroundColor(ec),
                     Print(format!("{:<ascii_w$}", clipped)),
                     ResetColor,
                 ).ok();
@@ -510,7 +523,7 @@ fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w
             match row as usize {
                 0 => { execute!(
                     out,
-                    SetForegroundColor(Color::Red),
+                    SetForegroundColor(ec),
                     SetAttribute(Attribute::Bold),
                     Print(&e.name),
                     ResetColor,
@@ -545,6 +558,7 @@ fn draw_1v1_side_by_side(
     combat: &Combat,
     start_row: u16,
     tw: usize,
+    ec: Color,
 ) -> u16 {
     let mid = (tw / 2) as u16;
     let max_hp = player.stats.max_hp();
@@ -574,15 +588,16 @@ fn draw_1v1_side_by_side(
         let idx = i as usize;
 
         // ── Joueur (gauche) ──────────────────────────────────────────────────
+        let pc = player.class.color();
         execute!(out, MoveTo(2, start_row + i)).ok();
         let p_line = p_ascii.get(idx).copied().unwrap_or("");
         let p_clipped: String = p_line.chars().take(p_art_w).collect();
         execute!(out,
-            SetForegroundColor(Color::Cyan), SetAttribute(Attribute::Bold),
+            SetForegroundColor(pc), SetAttribute(Attribute::Bold),
             Print(format!("{:<p_art_w$}", p_clipped)), ResetColor,
             Print("  ")).ok();
         match idx {
-            0 => { execute!(out, SetForegroundColor(Color::Cyan), SetAttribute(Attribute::Bold), Print(&player.name), ResetColor).ok(); }
+            0 => { execute!(out, SetForegroundColor(pc), SetAttribute(Attribute::Bold), Print(&player.name), ResetColor).ok(); }
             1 => {
                 print_hp_bar(out, player.hp, max_hp, 16);
                 execute!(out, SetForegroundColor(hp_color(player.hp, max_hp)),
@@ -610,11 +625,11 @@ fn draw_1v1_side_by_side(
             let stripped = if e_line.len() >= e_indent { &e_line[e_indent..] } else { e_line };
             let e_clipped: String = stripped.chars().take(e_art_w).collect();
             execute!(out,
-                SetForegroundColor(Color::DarkRed),
+                SetForegroundColor(ec),
                 Print(format!("{:<e_art_w$}", e_clipped)), ResetColor,
                 Print("  ")).ok();
             match idx {
-                0 => { execute!(out, SetForegroundColor(Color::Red), SetAttribute(Attribute::Bold), Print(&enemy.name), ResetColor).ok(); }
+                0 => { execute!(out, SetForegroundColor(ec), SetAttribute(Attribute::Bold), Print(&enemy.name), ResetColor).ok(); }
                 1 => {
                     print_hp_bar(out, enemy.hp, enemy.max_hp, 14);
                     execute!(out, SetForegroundColor(hp_color(enemy.hp, enemy.max_hp)),
@@ -633,31 +648,29 @@ fn draw_1v1_side_by_side(
 }
 
 fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat) {
+    let pc = player.class.color();
     let ascii_lines: Vec<&str> = player.class.ascii().lines().collect();
     let ascii_col = ascii_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0) + 3;
     let max_hp = player.stats.max_hp();
 
-    // 4 lignes de stats : nom, HP, Estus+Âmes, Spécial
     let row_count = ascii_lines.len().max(4);
 
     for i in 0..row_count {
         execute!(out, Print("  ")).ok();
 
-        // Colonne ASCII (couleur cyan comme le joueur)
         let line = ascii_lines.get(i).copied().unwrap_or("");
         execute!(
             out,
-            SetForegroundColor(Color::Cyan),
+            SetForegroundColor(pc),
             SetAttribute(Attribute::Bold),
             Print(format!("{:<ascii_col$}", line)),
             ResetColor,
         ).ok();
 
-        // Colonne stats
         match i {
             0 => execute!(
                 out,
-                SetForegroundColor(Color::Cyan),
+                SetForegroundColor(pc),
                 SetAttribute(Attribute::Bold),
                 Print(&player.name),
                 ResetColor,
