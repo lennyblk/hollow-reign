@@ -25,6 +25,8 @@ pub struct NavigationState {
     pub opened_chests: HashSet<u32>,
     /// Zones dont le boss a été définitivement tué.
     pub killed_bosses: HashSet<ZoneId>,
+    /// Locations dont les ennemis normaux ont été tués (reset au repos à la grace).
+    pub defeated_locations: HashSet<u32>,
 }
 
 impl NavigationState {
@@ -37,6 +39,7 @@ impl NavigationState {
             last_location: HashMap::new(),
             opened_chests: HashSet::new(),
             killed_bosses: HashSet::new(),
+            defeated_locations: HashSet::new(),
         }
     }
 
@@ -90,7 +93,8 @@ pub fn run_navigation(world: &World, state: &mut NavigationState) -> NavigationE
         let zone_boss_dead = state.killed_bosses.contains(&state.zone);
         let has_grace = location.contents.grace.is_some();
         let has_npc = location.contents.npc.is_some();
-        let has_enemies = location.contents.enemies.iter().any(|s| {
+        let enemies_defeated_here = state.defeated_locations.contains(&state.location_id);
+        let has_enemies = !enemies_defeated_here && location.contents.enemies.iter().any(|s| {
             s.enemy_type != EnemyType::Boss || !zone_boss_dead
         });
         let has_merchant = location.contents.merchant;
@@ -268,6 +272,7 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, flash: Opt
         let has_boss_only = !location.contents.enemies.is_empty()
             && location.contents.enemies.iter().all(|s| s.enemy_type == EnemyType::Boss);
 
+        let enemies_defeated_here = state.defeated_locations.contains(&state.location_id);
         if has_boss_only && zone_boss_dead {
             execute!(
                 out,
@@ -276,17 +281,26 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, flash: Opt
                 ResetColor,
             ).ok();
         } else if !location.contents.enemies.is_empty() {
-            let live: u32 = location.contents.enemies.iter()
-                .filter(|s| s.enemy_type != EnemyType::Boss || !zone_boss_dead)
-                .map(|s| s.count)
-                .sum();
-            if live > 0 {
+            if enemies_defeated_here {
                 execute!(
                     out,
-                    SetForegroundColor(Color::Red),
-                    Print(format!("  [Ennemis]  {} ennemi(s) en vue\r\n", live)),
+                    SetForegroundColor(Color::DarkGrey),
+                    Print("  [Ennemis]  vaincus\r\n"),
                     ResetColor,
                 ).ok();
+            } else {
+                let live: u32 = location.contents.enemies.iter()
+                    .filter(|s| s.enemy_type != EnemyType::Boss || !zone_boss_dead)
+                    .map(|s| s.count)
+                    .sum();
+                if live > 0 {
+                    execute!(
+                        out,
+                        SetForegroundColor(Color::Red),
+                        Print(format!("  [Ennemis]  {} ennemi(s) en vue\r\n", live)),
+                        ResetColor,
+                    ).ok();
+                }
             }
         }
     }
@@ -363,7 +377,7 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, flash: Opt
         .map_or(false, |c| !state.opened_chests.contains(&c.id));
     let mut actions: Vec<(&str, &str)> = vec![];
     if location.contents.grace.is_some() {
-        actions.push(("R", "Reposer"));
+        actions.push(("R", "Reposer (ennemis respawn)"));
     }
     if location.contents.npc.is_some() {
         actions.push(("T", "Parler"));
@@ -411,10 +425,95 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, flash: Opt
         ).ok();
     }
 
+    draw_zone_map(out, world, state);
     out.flush().ok();
 }
 
+// ─── MINI-MAP ────────────────────────────────────────────────────────────────
+
+const MAP_VIOLET: Color = Color::Rgb { r: 95, g: 81, b: 194 };
+
+fn draw_zone_map(out: &mut io::Stdout, world: &World, state: &NavigationState) {
+    let (tw, th) = terminal::size().unwrap_or((120, 30));
+    if th < 10 { return; }
+
+    let zone = world.get(state.zone);
+    let mut locs: Vec<_> = zone.locations.iter().collect();
+    locs.sort_by_key(|l| l.id);
+
+    let n = locs.len();
+    let sep = "     →     ";
+    let pad = "      ";
+
+    // Calcule la largeur max par nom pour tenir dans le terminal
+    let sep_total = sep.len() * n.saturating_sub(1);
+    let pad_total = pad.len() * 2 * n;
+    let borders = 2;
+    let name_budget = (tw as usize).saturating_sub(sep_total + pad_total + borders + 4);
+    let name_max = if n > 0 { name_budget / n } else { 10 };
+
+    // Largeur totale du contenu intérieur
+    let content_w: usize = locs.iter()
+        .map(|l| pad.len() + l.name.chars().count().min(name_max) + pad.len())
+        .sum::<usize>()
+        + sep.len() * n.saturating_sub(1);
+
+    let box_w = content_w + 2; // +2 pour │ et │
+    let col = ((tw as usize).saturating_sub(box_w)) / 2;
+
+    // Ancré en bas du terminal
+    let name_row = th.saturating_sub(4);
+
+    // Nom de zone centré au-dessus
+    let zone_col = col + box_w.saturating_sub(zone.name.len()) / 2;
+    execute!(
+        out,
+        MoveTo(zone_col as u16, name_row),
+        SetForegroundColor(MAP_VIOLET),
+        SetAttribute(Attribute::Bold),
+        Print(zone.name),
+        ResetColor,
+    ).ok();
+
+    // Coins hauts
+    let right_col = (col + box_w).saturating_sub(1);
+    execute!(out, MoveTo(col as u16, name_row + 1), SetForegroundColor(Color::DarkGrey), Print("┌"), ResetColor).ok();
+    execute!(out, MoveTo(right_col as u16, name_row + 1), SetForegroundColor(Color::DarkGrey), Print("┐"), ResetColor).ok();
+
+    // Contenu
+    execute!(out, MoveTo((col + 1) as u16, name_row + 2)).ok();
+
+    for (i, loc) in locs.iter().enumerate() {
+        let is_cur = loc.id == state.location_id;
+        let name = trunc(loc.name, name_max);
+        execute!(
+            out,
+            SetForegroundColor(if is_cur { MAP_VIOLET } else { Color::DarkGrey }),
+            SetAttribute(if is_cur { Attribute::Bold } else { Attribute::NormalIntensity }),
+            Print(format!("{}{}{}", pad, name, pad)),
+            ResetColor,
+        ).ok();
+        if i + 1 < n {
+            execute!(out, SetForegroundColor(Color::DarkGrey), Print(sep), ResetColor).ok();
+        }
+    }
+
+    // Coins bas
+    execute!(out, MoveTo(col as u16, name_row + 3), SetForegroundColor(Color::DarkGrey), Print("└"), ResetColor).ok();
+    execute!(out, MoveTo(right_col as u16, name_row + 3), SetForegroundColor(Color::DarkGrey), Print("┘"), ResetColor).ok();
+}
+
 // ─── UTILITAIRE ──────────────────────────────────────────────────────────────
+
+fn trunc(s: &str, max: usize) -> &str {
+    let mut end = s.len();
+    let mut count = 0;
+    for (i, _) in s.char_indices() {
+        if count == max { end = i; break; }
+        count += 1;
+    }
+    &s[..end]
+}
 
 /// Coupe le texte en lignes de max `width` caractères (word-wrap simple).
 fn wrap_text(text: &str, width: usize) -> Vec<&str> {

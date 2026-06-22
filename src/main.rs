@@ -82,6 +82,7 @@ fn main() {
                         .unwrap_or("Grace")
                 };
                 player.rest_at_grace(id);
+                state.defeated_locations.clear();
                 save::save(&player, &state);
                 let travel = grace_ui::run_grace_menu(&mut player, grace_name, id, &world);
                 if let Some(target_id) = travel {
@@ -113,6 +114,7 @@ fn main() {
                         for item in items {
                             player.pick_up(item);
                         }
+                        state.defeated_locations.insert(state.location_id);
                         if boss_killed {
                             state.killed_bosses.insert(state.zone);
                             if state.zone == ZoneId::TheVoid {
