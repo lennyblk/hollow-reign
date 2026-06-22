@@ -440,67 +440,223 @@ fn draw_zone_map(out: &mut io::Stdout, world: &World, state: &NavigationState) {
     let zone = world.get(state.zone);
     let mut locs: Vec<_> = zone.locations.iter().collect();
     locs.sort_by_key(|l| l.id);
-
     let n = locs.len();
+    if n == 0 { return; }
+
     let sep = "     →     ";
+    let sep_w = sep.chars().count(); // 11, pas sep.len() (13 bytes à cause de →)
     let pad = "      ";
+    let pad_w = pad.len(); // que des espaces ASCII, len() == colonnes
 
-    // Calcule la largeur max par nom pour tenir dans le terminal
-    let sep_total = sep.len() * n.saturating_sub(1);
-    let pad_total = pad.len() * 2 * n;
-    let borders = 2;
-    let name_budget = (tw as usize).saturating_sub(sep_total + pad_total + borders + 4);
-    let name_max = if n > 0 { name_budget / n } else { 10 };
-
-    // Largeur totale du contenu intérieur
-    let content_w: usize = locs.iter()
-        .map(|l| pad.len() + l.name.chars().count().min(name_max) + pad.len())
-        .sum::<usize>()
-        + sep.len() * n.saturating_sub(1);
-
-    let box_w = content_w + 2; // +2 pour │ et │
-    let col = ((tw as usize).saturating_sub(box_w)) / 2;
-
-    // Ancré en bas du terminal
-    let name_row = th.saturating_sub(4);
-
-    // Nom de zone centré au-dessus
-    let zone_col = col + box_w.saturating_sub(zone.name.len()) / 2;
-    execute!(
-        out,
-        MoveTo(zone_col as u16, name_row),
-        SetForegroundColor(MAP_VIOLET),
-        SetAttribute(Attribute::Bold),
-        Print(zone.name),
-        ResetColor,
-    ).ok();
-
-    // Coins hauts
-    let right_col = (col + box_w).saturating_sub(1);
-    execute!(out, MoveTo(col as u16, name_row + 1), SetForegroundColor(Color::DarkGrey), Print("┌"), ResetColor).ok();
-    execute!(out, MoveTo(right_col as u16, name_row + 1), SetForegroundColor(Color::DarkGrey), Print("┐"), ResetColor).ok();
-
-    // Contenu
-    execute!(out, MoveTo((col + 1) as u16, name_row + 2)).ok();
-
-    for (i, loc) in locs.iter().enumerate() {
-        let is_cur = loc.id == state.location_id;
-        let name = trunc(loc.name, name_max);
-        execute!(
-            out,
-            SetForegroundColor(if is_cur { MAP_VIOLET } else { Color::DarkGrey }),
-            SetAttribute(if is_cur { Attribute::Bold } else { Attribute::NormalIntensity }),
-            Print(format!("{}{}{}", pad, name, pad)),
-            ResetColor,
-        ).ok();
-        if i + 1 < n {
-            execute!(out, SetForegroundColor(Color::DarkGrey), Print(sep), ResetColor).ok();
+    // Trouve le premier noeud branch (connexion forward non-adjacente)
+    let mut branch: Option<(usize, usize)> = None; // (branch_idx, skip_target_idx)
+    'outer: for (i, loc) in locs.iter().enumerate() {
+        for conn in &loc.connections {
+            if let LocationTarget::Here(tid) = conn.target {
+                if let Some(j) = locs.iter().position(|l| l.id == tid) {
+                    if j > i + 1 { branch = Some((i, j)); break 'outer; }
+                }
+            }
         }
     }
 
-    // Coins bas
-    execute!(out, MoveTo(col as u16, name_row + 3), SetForegroundColor(Color::DarkGrey), Print("└"), ResetColor).ok();
-    execute!(out, MoveTo(right_col as u16, name_row + 3), SetForegroundColor(Color::DarkGrey), Print("┘"), ResetColor).ok();
+    if let Some((branch_idx, skip_idx)) = branch {
+        // ── LAYOUT BRANCH : upper row + lower row ─────────────────────────────
+        let upper_locs = &locs[..=branch_idx];
+        let lower_locs = &locs[branch_idx + 1..];
+        let n_lower = lower_locs.len();
+
+        // name_max basé sur la lower row (plus large)
+        let name_max = ((tw as usize).saturating_sub(
+            pad_w * 2 * n_lower + sep_w * n_lower.saturating_sub(1) + 6
+        )) / n_lower.max(1);
+
+        let lower_lens: Vec<usize> = lower_locs.iter()
+            .map(|l| l.name.chars().count().min(name_max)).collect();
+        let upper_lens: Vec<usize> = upper_locs.iter()
+            .map(|l| l.name.chars().count().min(name_max)).collect();
+
+        // Calcule les centres des nodes lower row (relatif à lower_start=0)
+        let mut lower_centers: Vec<isize> = Vec::new();
+        let mut cur: isize = 0;
+        for i in 0..n_lower {
+            cur += pad_w as isize;
+            lower_centers.push(cur + lower_lens[i] as isize / 2);
+            cur += lower_lens[i] as isize + pad_w as isize;
+            if i + 1 < n_lower { cur += sep_w as isize; }
+        }
+        let lower_content_w = cur as usize;
+
+        let skip_local = skip_idx - branch_idx - 1;
+        let arrow_l = lower_centers[0];
+        let arrow_r = lower_centers[skip_local.min(n_lower - 1)];
+        let branch_center_rel = (arrow_l + arrow_r) / 2; // relatif à lower_start
+
+        // Calcule la position de upper row :
+        // on veut que le centre du noeud branch soit à branch_center_rel (relatif à lower_start)
+        // pre_width = contenu des locs avant le branch node
+        let pre_w: isize = if upper_locs.len() > 1 {
+            (upper_lens[..upper_locs.len() - 1].iter().sum::<usize>()
+                + pad_w * 2 * (upper_locs.len() - 1)
+                + sep_w * (upper_locs.len() - 1)) as isize
+        } else { 0 };
+        let branch_len = *upper_lens.last().unwrap_or(&10) as isize;
+        // centre du branch node depuis upper_start = pre_w + pad + branch_len/2
+        let branch_from_upper: isize = pre_w + pad_w as isize + branch_len / 2;
+        // upper_start relatif à lower_start
+        let upper_start_rel: isize = branch_center_rel - branch_from_upper;
+
+        // Le noeud branch doit visuellement couvrir la zone [arrow_l, arrow_r]
+        // On étend le display du noeud branch si nécessaire
+        let branch_natural_start = branch_center_rel - branch_len / 2 - pad_w as isize;
+        let extra_l = (arrow_l - pad_w as isize - branch_natural_start).max(0) as usize;
+        let branch_natural_end = branch_center_rel + branch_len / 2 + pad_w as isize;
+        let extra_r = (arrow_r + pad_w as isize - branch_natural_end).max(0) as usize;
+
+        // upper row content width
+        let upper_content_w = (pre_w as usize)
+            + pad_w + extra_l + upper_lens.last().unwrap_or(&0) + extra_r + pad_w;
+
+        // leftmost de tout (pour calculer col)
+        let leftmost = upper_start_rel.min(0);
+        let rightmost = ((upper_start_rel + upper_content_w as isize)
+            .max(lower_content_w as isize)) as usize;
+        let content_span = (rightmost as isize - leftmost.min(0)).max(1) as usize;
+        let box_w = content_span + 4;
+        let col = ((tw as usize).saturating_sub(box_w)) / 2;
+
+        // Positions terminales
+        let lower_term = (col as isize + 2 - leftmost) as usize;
+        let upper_term = (lower_term as isize + upper_start_rel) as usize;
+        let arrow_l_term = (lower_term as isize + arrow_l) as usize;
+        let arrow_r_term = (lower_term as isize + arrow_r) as usize;
+        let branch_center_term = (lower_term as isize + branch_center_rel) as usize;
+        let right_col = col + box_w - 1;
+
+        // 8 lignes: name + ┌┐ + upper + │ + ┌─┴─┐ + ↓↓ + lower + └┘
+        let name_row = th.saturating_sub(8);
+
+        // Nom de zone
+        let zone_name_upper = zone.name.to_uppercase();
+        let zone_col = col + box_w.saturating_sub(zone_name_upper.len()) / 2;
+        execute!(out, MoveTo(zone_col as u16, name_row),
+            SetForegroundColor(Color::Rgb { r: 255, g: 140, b: 30 }), SetAttribute(Attribute::Bold),
+            Print(&zone_name_upper), ResetColor).ok();
+
+        // Coins hauts
+        execute!(out, MoveTo(col as u16, name_row + 1),
+            SetForegroundColor(Color::DarkGrey), Print("┌"), ResetColor).ok();
+        execute!(out, MoveTo(right_col as u16, name_row + 1),
+            SetForegroundColor(Color::DarkGrey), Print("┐"), ResetColor).ok();
+
+        // Upper row
+        execute!(out, MoveTo(upper_term as u16, name_row + 2)).ok();
+        for (i, loc) in upper_locs.iter().enumerate() {
+            let is_cur = loc.id == state.location_id;
+            let name = trunc(loc.name, name_max);
+            let (pl, pr) = if i == upper_locs.len() - 1 {
+                (pad_w + extra_l, pad_w + extra_r)
+            } else {
+                (pad_w, pad_w)
+            };
+            execute!(out,
+                SetForegroundColor(if is_cur { MAP_VIOLET } else { Color::DarkGrey }),
+                SetAttribute(if is_cur { Attribute::Bold } else { Attribute::NormalIntensity }),
+                Print(format!("{}{}{}", " ".repeat(pl), name, " ".repeat(pr))),
+                ResetColor).ok();
+            if i + 1 < upper_locs.len() {
+                execute!(out, SetForegroundColor(Color::DarkGrey), Print(sep), ResetColor).ok();
+            }
+        }
+
+        // T-connector: │ stem
+        execute!(out, MoveTo(branch_center_term as u16, name_row + 3),
+            SetForegroundColor(Color::DarkGrey), Print("│"), ResetColor).ok();
+
+        // T-connector: ┌──┴──┐ spanning arrow_l_term..arrow_r_term
+        {
+            let span = arrow_r_term.saturating_sub(arrow_l_term) + 1;
+            let mut row = String::new();
+            for i in 0..span {
+                let abs = arrow_l_term + i;
+                if abs == arrow_l_term { row.push('┌'); }
+                else if abs == arrow_r_term { row.push('┐'); }
+                else if abs == branch_center_term { row.push('┴'); }
+                else { row.push('─'); }
+            }
+            execute!(out, MoveTo(arrow_l_term as u16, name_row + 4),
+                SetForegroundColor(Color::DarkGrey), Print(&row), ResetColor).ok();
+        }
+
+        // Flèches ↓ vers lower row
+        execute!(out, MoveTo(arrow_l_term as u16, name_row + 5),
+            SetForegroundColor(Color::DarkGrey), Print("↓"), ResetColor).ok();
+        execute!(out, MoveTo(arrow_r_term as u16, name_row + 5),
+            SetForegroundColor(Color::DarkGrey), Print("↓"), ResetColor).ok();
+
+        // Lower row
+        execute!(out, MoveTo(lower_term as u16, name_row + 6)).ok();
+        for (i, loc) in lower_locs.iter().enumerate() {
+            let is_cur = loc.id == state.location_id;
+            let name = trunc(loc.name, name_max);
+            execute!(out,
+                SetForegroundColor(if is_cur { MAP_VIOLET } else { Color::DarkGrey }),
+                SetAttribute(if is_cur { Attribute::Bold } else { Attribute::NormalIntensity }),
+                Print(format!("{}{}{}", pad, name, pad)), ResetColor).ok();
+            if i + 1 < n_lower {
+                execute!(out, SetForegroundColor(Color::DarkGrey), Print(sep), ResetColor).ok();
+            }
+        }
+
+        // Coins bas
+        execute!(out, MoveTo(col as u16, name_row + 7),
+            SetForegroundColor(Color::DarkGrey), Print("└"), ResetColor).ok();
+        execute!(out, MoveTo(right_col as u16, name_row + 7),
+            SetForegroundColor(Color::DarkGrey), Print("┘"), ResetColor).ok();
+
+    } else {
+        // ── LAYOUT LINÉAIRE ───────────────────────────────────────────────────
+        let name_max = ((tw as usize).saturating_sub(
+            pad_w * 2 * n + sep_w * n.saturating_sub(1) + 6
+        )) / n.max(1);
+
+        let actual_lens: Vec<usize> = locs.iter()
+            .map(|l| l.name.chars().count().min(name_max)).collect();
+        let content_w: usize = actual_lens.iter().sum::<usize>()
+            + pad_w * 2 * n + sep_w * n.saturating_sub(1);
+        let box_w = content_w + 4;
+        let col = ((tw as usize).saturating_sub(box_w)) / 2;
+        let right_col = col + box_w - 1;
+        let name_row = th.saturating_sub(4);
+
+        let zone_name_upper = zone.name.to_uppercase();
+        let zone_col = col + box_w.saturating_sub(zone_name_upper.len()) / 2;
+        execute!(out, MoveTo(zone_col as u16, name_row),
+            SetForegroundColor(Color::Rgb { r: 255, g: 140, b: 30 }), SetAttribute(Attribute::Bold),
+            Print(&zone_name_upper), ResetColor).ok();
+        execute!(out, MoveTo(col as u16, name_row + 1),
+            SetForegroundColor(Color::DarkGrey), Print("┌"), ResetColor).ok();
+        execute!(out, MoveTo(right_col as u16, name_row + 1),
+            SetForegroundColor(Color::DarkGrey), Print("┐"), ResetColor).ok();
+
+        execute!(out, MoveTo((col + 2) as u16, name_row + 2)).ok();
+        for (i, loc) in locs.iter().enumerate() {
+            let is_cur = loc.id == state.location_id;
+            let name = trunc(loc.name, name_max);
+            execute!(out,
+                SetForegroundColor(if is_cur { MAP_VIOLET } else { Color::DarkGrey }),
+                SetAttribute(if is_cur { Attribute::Bold } else { Attribute::NormalIntensity }),
+                Print(format!("{}{}{}", pad, name, pad)), ResetColor).ok();
+            if i + 1 < n {
+                execute!(out, SetForegroundColor(Color::DarkGrey), Print(sep), ResetColor).ok();
+            }
+        }
+
+        execute!(out, MoveTo(col as u16, name_row + 3),
+            SetForegroundColor(Color::DarkGrey), Print("└"), ResetColor).ok();
+        execute!(out, MoveTo(right_col as u16, name_row + 3),
+            SetForegroundColor(Color::DarkGrey), Print("┘"), ResetColor).ok();
+    }
 }
 
 // ─── UTILITAIRE ──────────────────────────────────────────────────────────────
