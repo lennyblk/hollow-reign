@@ -12,9 +12,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
+      - name: Zip binary
+        run: Compress-Archive -Path target/release/hollow-reign.exe -DestinationPath hollow-reign-x86_64-pc-windows-msvc.zip
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: target/release/hollow-reign.exe
+          files: hollow-reign-x86_64-pc-windows-msvc.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

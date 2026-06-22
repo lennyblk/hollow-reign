@@ -20,6 +20,7 @@ pub fn check_and_update() {
         .repo_owner("lennyblk")
         .repo_name("hollow-reign")
         .bin_name("hollow-reign")
+        .target("x86_64-pc-windows-msvc")
         .current_version(env!("CARGO_PKG_VERSION"))
         .no_confirm(true)
         .build()
