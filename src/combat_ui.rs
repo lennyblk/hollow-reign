@@ -16,7 +16,7 @@ use crate::inventory_ui::{open_inventory, InventoryResult};
 use crate::item::{Element, Item};
 use crate::phrases::{Difficulty, PhrasePool};
 use crate::player::Player;
-use crate::typing::{perfect_threshold, time_limit_ms, typing_challenge};
+use crate::typing::{combat_challenge, perfect_threshold, time_limit_ms};
 use crate::zone::{EnemySpawn, ZoneId};
 
 // ─── RÉSULTAT ────────────────────────────────────────────────────────────────
@@ -80,7 +80,12 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
         if !player.status.can_act() {
             push_log(&mut log, "Tu es immobilise — tour passe.".to_string());
             draw_combat(&mut out, player, &combat, &log, combat.turn, zone);
-        } else { 'input: loop {
+        } else {
+            // Vide les events résiduels (typing/parry du tour ennemi)
+            while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+                let _ = event::read();
+            }
+        'input: loop {
             if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
                 match code {
                     // Attaque normale
@@ -104,8 +109,8 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                             let pct = perfect_threshold(&diff);
                             let phrase = phrases.next(diff);
 
-                            // typing_challenge gère enable/disable raw mode lui-même
-                            let parry = typing_challenge(phrase, limit, pct);
+                            // combat_challenge gère enable/disable raw mode lui-même
+                            let parry = combat_challenge(phrase, limit, pct);
                             // Il a désactivé raw mode — on réactive
                             terminal::enable_raw_mode().ok();
                             execute!(out, Hide).ok();
@@ -170,7 +175,7 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                 let pct = perfect_threshold(&diff);
                 let phrase = phrases.next(diff);
 
-                let parry = typing_challenge(phrase, limit, pct);
+                let parry = combat_challenge(phrase, limit, pct);
                 terminal::enable_raw_mode().ok();
                 execute!(out, Hide).ok();
 
@@ -389,9 +394,9 @@ fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[St
     } else {
         let nr = draw_enemies_columns(out, combat, 2, w, ec);
         execute!(out, MoveTo(0, nr)).ok();
-        separator(out, w);
-        draw_player_block(out, player, combat);
-        nr
+        separator(out, w); // 3 lignes
+        let player_rows = draw_player_block(out, player, combat);
+        nr + 3 + player_rows
     };
     execute!(out, MoveTo(0, next_row)).ok();
 
@@ -647,13 +652,14 @@ fn draw_1v1_side_by_side(
     start_row + rows + 1
 }
 
-fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat) {
+fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat) -> u16 {
     let pc = player.class.color();
     let ascii_lines: Vec<&str> = player.class.ascii().lines().collect();
     let ascii_col = ascii_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0) + 3;
     let max_hp = player.stats.max_hp();
 
     let row_count = ascii_lines.len().max(4);
+    let rows_u16 = row_count as u16;
 
     for i in 0..row_count {
         execute!(out, Print("  ")).ok();
@@ -714,6 +720,7 @@ fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat) {
 
         execute!(out, Print("\r\n")).ok();
     }
+    rows_u16
 }
 
 fn separator(out: &mut io::Stdout, w: usize) {

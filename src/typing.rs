@@ -2,7 +2,7 @@ use crossterm::{
     cursor::{Hide, MoveUp, RestorePosition, SavePosition, Show},
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
+    style::{Attribute, Color, Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor},
     terminal::{self, Clear, ClearType},
 };
 use std::io::{self, Write};
@@ -244,4 +244,159 @@ fn show_result(out: &mut io::Stdout, result: &ParryResult) {
     out.flush().ok();
 
     std::thread::sleep(Duration::from_millis(1_200));
+}
+
+// ─── PARRY CHALLENGE (timing bar) ────────────────────────────────────────────
+
+/// Perfect  = curseur pile sur la lettre
+/// Good     = curseur dans la zone colorée (±2 autour de la lettre)
+/// Miss     = raté ou mauvaise touche ou temps écoulé
+pub fn parry_challenge() -> ParryResult {
+    let mut out = io::stdout();
+    terminal::enable_raw_mode().expect("crossterm: raw mode requis");
+    execute!(out, Hide).ok();
+
+    print!("\n\n\n\n\n\n\n\n");
+    out.flush().ok();
+    execute!(out, MoveUp(8), SavePosition).ok();
+
+    let term_w = terminal::size().map(|(w, _)| w as usize).unwrap_or(80);
+    let bar_w = term_w.saturating_sub(10).max(20);
+
+    let letter = (b'a' + rand::random::<u8>() % 26) as char;
+    const ZONE_HALF: usize = 2;
+    const ZONE_W: usize = ZONE_HALF * 2 + 1;
+
+    let range = bar_w.saturating_sub(ZONE_W + ZONE_HALF * 2);
+    let target_col = ZONE_HALF + if range > 0 { rand::random::<usize>() % range } else { 0 };
+
+    let duration_ms = 3_000u64;
+    let start = Instant::now();
+
+    let result = loop {
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        if elapsed_ms >= duration_ms {
+            break ParryResult::Miss;
+        }
+
+        // Curseur qui rebondit 1 fois sur toute la largeur (3s)
+        let cycle = (bar_w * 2) as u64;
+        let pixel = (elapsed_ms * cycle / duration_ms) % cycle;
+        let cursor_col = if pixel < bar_w as u64 { pixel as usize } else { (cycle - pixel) as usize };
+
+        draw_parry_bar(&mut out, bar_w, target_col, ZONE_HALF, letter, cursor_col, elapsed_ms, duration_ms);
+
+        if event::poll(Duration::from_millis(16)).unwrap_or(false) {
+            if let Ok(Event::Key(key)) = event::read() {
+                if key.kind != KeyEventKind::Press { continue; }
+                match key.code {
+                    KeyCode::Char(c) if c == letter || c == letter.to_ascii_uppercase() => {
+                        let diff = (cursor_col as i32 - target_col as i32).unsigned_abs() as usize;
+                        break if diff == 0 {
+                            ParryResult::Perfect
+                        } else if diff <= ZONE_HALF {
+                            ParryResult::Good
+                        } else {
+                            ParryResult::Miss
+                        };
+                    }
+                    KeyCode::Esc | KeyCode::Char(_) => break ParryResult::Miss,
+                    _ => {}
+                }
+            }
+        }
+    };
+
+    show_result(&mut out, &result);
+
+    execute!(out, Show).ok();
+    terminal::disable_raw_mode().ok();
+    result
+}
+
+fn draw_parry_bar(
+    out: &mut io::Stdout,
+    bar_w: usize,
+    target_col: usize,
+    zone_half: usize,
+    letter: char,
+    cursor_col: usize,
+    elapsed_ms: u64,
+    duration_ms: u64,
+) {
+    execute!(out, RestorePosition).ok();
+
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+
+    execute!(
+        out,
+        Clear(ClearType::CurrentLine),
+        SetForegroundColor(Color::DarkYellow),
+        SetAttribute(Attribute::Bold),
+        Print(format!("  PARRY !  Appuyez sur [{}] quand le curseur est dessus :\r\n",
+            letter.to_ascii_uppercase())),
+        ResetColor,
+    ).ok();
+
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+
+    let remaining_s = duration_ms.saturating_sub(elapsed_ms) as f32 / 1000.0;
+    execute!(out, Clear(ClearType::CurrentLine), Print("  [")).ok();
+
+    for c in 0..bar_w {
+        let dist = (c as i32 - target_col as i32).unsigned_abs() as usize;
+        let on_zone = dist <= zone_half;
+        let is_center = c == target_col;
+        let is_cursor = c == cursor_col;
+
+        if is_cursor && on_zone {
+            execute!(
+                out,
+                SetBackgroundColor(Color::Rgb { r: 200, g: 140, b: 0 }),
+                SetForegroundColor(Color::White),
+                SetAttribute(Attribute::Bold),
+                Print("▌"),
+                ResetColor,
+            ).ok();
+        } else if is_cursor {
+            execute!(
+                out,
+                SetForegroundColor(Color::White),
+                SetAttribute(Attribute::Bold),
+                Print("▌"),
+                ResetColor,
+            ).ok();
+        } else if on_zone {
+            let ch = if is_center { letter.to_ascii_uppercase() } else { ' ' };
+            execute!(
+                out,
+                SetBackgroundColor(Color::Rgb { r: 200, g: 140, b: 0 }),
+                SetForegroundColor(Color::Black),
+                SetAttribute(Attribute::Bold),
+                Print(ch),
+                ResetColor,
+            ).ok();
+        } else {
+            execute!(out, SetForegroundColor(Color::DarkGrey), Print("░"), ResetColor).ok();
+        }
+    }
+
+    execute!(out, Print(format!("] {:.1}s\r\n", remaining_s))).ok();
+
+    for _ in 0..4 {
+        execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+    }
+
+    out.flush().ok();
+}
+
+// ─── CHALLENGE ALÉATOIRE ─────────────────────────────────────────────────────
+
+/// Choisit aléatoirement entre typing_challenge (40%) et parry_challenge (60%).
+pub fn combat_challenge(phrase: &str, limit_ms: u64, perfect_pct: u64) -> ParryResult {
+    if rand::random::<u8>() < 154 {
+        parry_challenge()
+    } else {
+        typing_challenge(phrase, limit_ms, perfect_pct)
+    }
 }

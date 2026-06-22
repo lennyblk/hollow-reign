@@ -77,7 +77,7 @@ pub enum NavigationEvent {
 
 // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
 
-pub fn run_navigation(world: &World, state: &mut NavigationState, player: &Player) -> NavigationEvent {
+pub fn run_navigation(world: &World, state: &mut NavigationState, player: &mut Player) -> NavigationEvent {
     let mut out = io::stdout();
     terminal::enable_raw_mode().expect("raw mode requis");
     execute!(out, Hide).ok();
@@ -161,6 +161,14 @@ pub fn run_navigation(world: &World, state: &mut NavigationState, player: &Playe
                 // Sauvegarde manuelle
                 KeyCode::Char('s') | KeyCode::Char('S') => {
                     break NavigationEvent::Save;
+                }
+                // Estus hors combat
+                KeyCode::Char('h') | KeyCode::Char('H') if player.estus_charges > 0 => {
+                    player.use_estus();
+                    flash = Some(format!(
+                        "Tu bois une fiole d'estus. PV : {}/{}  (Estus restants : {})",
+                        player.hp, player.stats.max_hp(), player.estus_charges
+                    ));
                 }
                 // Quitter
                 KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
@@ -404,6 +412,9 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, player: &P
         actions.push(("C", "Coffre"));
     }
     actions.push(("I", "Inventaire"));
+    if player.estus_charges > 0 {
+        actions.push(("H", "Estus"));
+    }
     actions.push(("S", "Sauvegarder"));
     actions.push(("Q", "Quitter"));
 
@@ -449,7 +460,7 @@ fn draw_player_panel(out: &mut io::Stdout, player: &Player, _w: usize, start_row
     let pc = player.class.color();
     let mid = (tw / 2) as usize;
     let art_lines: Vec<&str> = player.class.ascii().lines().collect();
-    let panel_h = art_lines.len().max(4) as u16;
+    let panel_h = art_lines.len().max(10) as u16;
     let art_w = art_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0).min(mid.saturating_sub(4));
     let stats_col = (art_w + 6) as u16;
     let right_col = (mid + 2) as u16;
@@ -487,10 +498,13 @@ fn draw_player_panel(out: &mut io::Stdout, player: &Player, _w: usize, start_row
                 Print(format!("Estus {}/{}   ", player.estus_charges, player.max_estus())),
                 SetForegroundColor(Color::DarkYellow), Print(format!("◈ {} ames", player.souls)),
                 ResetColor).ok(); }
-            3 => { execute!(out, SetForegroundColor(Color::DarkGrey),
-                Print(format!("Vig:{} For:{} Dex:{} Int:{} Foi:{} Arc:{} Esp:{}",
-                    s.vigor, s.strength, s.dexterity, s.intelligence, s.faith, s.arcane, s.mind)),
-                ResetColor).ok(); }
+            3 => { execute!(out, SetForegroundColor(Color::DarkGrey), Print(format!("Vigueur      : {}", s.vigor)),        ResetColor).ok(); }
+            4 => { execute!(out, SetForegroundColor(Color::DarkGrey), Print(format!("Force        : {}", s.strength)),     ResetColor).ok(); }
+            5 => { execute!(out, SetForegroundColor(Color::DarkGrey), Print(format!("Dexterité    : {}", s.dexterity)),    ResetColor).ok(); }
+            6 => { execute!(out, SetForegroundColor(Color::DarkGrey), Print(format!("Intelligence : {}", s.intelligence)), ResetColor).ok(); }
+            7 => { execute!(out, SetForegroundColor(Color::DarkGrey), Print(format!("Foi          : {}", s.faith)),        ResetColor).ok(); }
+            8 => { execute!(out, SetForegroundColor(Color::DarkGrey), Print(format!("Arcane       : {}", s.arcane)),       ResetColor).ok(); }
+            9 => { execute!(out, SetForegroundColor(Color::DarkGrey), Print(format!("Esprit       : {}", s.mind)),         ResetColor).ok(); }
             _ => {}
         }
 

@@ -70,7 +70,7 @@ fn main() {
     drop(_title_music);
 
     loop {
-        match run_navigation(&world, &mut state, &player) {
+        match run_navigation(&world, &mut state, &mut player) {
             NavigationEvent::RestAtGrace(id) => {
                 let grace_name = {
                     let zone = world.get(state.zone);
