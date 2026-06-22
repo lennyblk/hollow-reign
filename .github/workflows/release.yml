@@ -13,7 +13,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
       - name: Zip binary
-        run: Compress-Archive -Path target/release/hollow-reign.exe -DestinationPath hollow-reign-x86_64-pc-windows-msvc.zip
+        run: Compress-Archive -Path target/release/hollow-reign.exe -DestinationPath hollow-reign-x86_64-pc-windows-msvc.zip -CompressionLevel NoCompression
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
