@@ -10,7 +10,7 @@ use crossterm::{
 };
 
 use crate::combat::Combat;
-use crate::enemy::EnemyType;
+use crate::enemy::{Enemy, EnemyType};
 use crate::enemy_catalog::{drops, spawn};
 use crate::inventory_ui::{open_inventory, InventoryResult};
 use crate::item::{Element, Item};
@@ -77,7 +77,10 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
         // ── Tour du joueur ────────────────────────────────────────────────────
         draw_combat(&mut out, player, &combat, &log, combat.turn);
 
-        'input: loop {
+        if !player.status.can_act() {
+            push_log(&mut log, "Tu es immobilise — tour passe.".to_string());
+            draw_combat(&mut out, player, &combat, &log, combat.turn);
+        } else { 'input: loop {
             if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
                 match code {
                     // Attaque normale
@@ -146,7 +149,7 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                     _ => {}
                 }
             }
-        }
+        } } // end if can_act / 'input
 
         if combat.is_over(player) {
             break 'main end_result(player, &combat, zone);
@@ -367,15 +370,17 @@ fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[St
         ResetColor,
     ).ok();
 
-    // ── Ennemis côte à côte ───────────────────────────────────────────────────
-    let next_row = draw_enemies_columns(out, combat, 2, w);
+    // ── Affichage combattants ─────────────────────────────────────────────────
+    let next_row = if combat.enemies.len() == 1 {
+        draw_1v1_side_by_side(out, player, &combat.enemies[0], combat, 2, w)
+    } else {
+        let nr = draw_enemies_columns(out, combat, 2, w);
+        execute!(out, MoveTo(0, nr)).ok();
+        separator(out, w);
+        draw_player_block(out, player, combat);
+        nr
+    };
     execute!(out, MoveTo(0, next_row)).ok();
-
-    // ── Séparateur ────────────────────────────────────────────────────────────
-    separator(out, w);
-
-    // ── Joueur ────────────────────────────────────────────────────────────────
-    draw_player_block(out, player, combat);
 
     // ── Séparateur ────────────────────────────────────────────────────────────
     separator(out, w);
@@ -531,6 +536,100 @@ fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w
     }
 
     start_row + max_h + 1
+}
+
+fn draw_1v1_side_by_side(
+    out: &mut io::Stdout,
+    player: &Player,
+    enemy: &Enemy,
+    combat: &Combat,
+    start_row: u16,
+    tw: usize,
+) -> u16 {
+    let mid = (tw / 2) as u16;
+    let max_hp = player.stats.max_hp();
+
+    let p_ascii: Vec<&str> = player.class.ascii().lines().collect();
+    let e_ascii: Vec<&str> = enemy.ascii.lines().collect();
+
+    // strip common indent from enemy art
+    let e_indent = e_ascii.iter()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.len() - l.trim_start().len())
+        .min().unwrap_or(0);
+
+    let p_art_w = p_ascii.iter().map(|l| l.chars().count()).max().unwrap_or(0)
+        .min(mid as usize - 6);
+    let e_art_w = e_ascii.iter()
+        .map(|l| if l.len() >= e_indent { l[e_indent..].chars().count() } else { 0 })
+        .max().unwrap_or(0)
+        .min(mid as usize - 6);
+
+    let elems: String = enemy.elements.iter()
+        .map(|el| element_label(el)).collect::<Vec<_>>().join("/");
+
+    let rows = p_ascii.len().max(e_ascii.len()).max(4) as u16;
+
+    for i in 0..rows {
+        let idx = i as usize;
+
+        // ── Joueur (gauche) ──────────────────────────────────────────────────
+        execute!(out, MoveTo(2, start_row + i)).ok();
+        let p_line = p_ascii.get(idx).copied().unwrap_or("");
+        let p_clipped: String = p_line.chars().take(p_art_w).collect();
+        execute!(out,
+            SetForegroundColor(Color::Cyan), SetAttribute(Attribute::Bold),
+            Print(format!("{:<p_art_w$}", p_clipped)), ResetColor,
+            Print("  ")).ok();
+        match idx {
+            0 => { execute!(out, SetForegroundColor(Color::Cyan), SetAttribute(Attribute::Bold), Print(&player.name), ResetColor).ok(); }
+            1 => {
+                print_hp_bar(out, player.hp, max_hp, 16);
+                execute!(out, SetForegroundColor(hp_color(player.hp, max_hp)),
+                    Print(format!(" {:>3}/{:<3}", player.hp, max_hp)), ResetColor).ok();
+            }
+            2 => { execute!(out, SetForegroundColor(Color::Yellow),
+                Print(format!("Estus {}/{}  Ames: {}", player.estus_charges, player.max_estus(), player.souls)),
+                ResetColor).ok(); }
+            3 => {
+                if combat.player_elemental_cooldown > 0 {
+                    execute!(out, SetForegroundColor(Color::DarkGrey),
+                        Print(format!("Special: {} tour(s)", combat.player_elemental_cooldown)), ResetColor).ok();
+                } else {
+                    execute!(out, SetForegroundColor(Color::Green), SetAttribute(Attribute::Bold),
+                        Print("Special: PRET !"), ResetColor).ok();
+                }
+            }
+            _ => {}
+        }
+
+        // ── Ennemi (droite) ──────────────────────────────────────────────────
+        execute!(out, MoveTo(mid + 2, start_row + i)).ok();
+        if enemy.is_alive() {
+            let e_line = e_ascii.get(idx).copied().unwrap_or("");
+            let stripped = if e_line.len() >= e_indent { &e_line[e_indent..] } else { e_line };
+            let e_clipped: String = stripped.chars().take(e_art_w).collect();
+            execute!(out,
+                SetForegroundColor(Color::DarkRed),
+                Print(format!("{:<e_art_w$}", e_clipped)), ResetColor,
+                Print("  ")).ok();
+            match idx {
+                0 => { execute!(out, SetForegroundColor(Color::Red), SetAttribute(Attribute::Bold), Print(&enemy.name), ResetColor).ok(); }
+                1 => {
+                    print_hp_bar(out, enemy.hp, enemy.max_hp, 14);
+                    execute!(out, SetForegroundColor(hp_color(enemy.hp, enemy.max_hp)),
+                        Print(format!(" {:>3}/{:<3}", enemy.hp, enemy.max_hp)), ResetColor).ok();
+                }
+                2 => { execute!(out, SetForegroundColor(Color::DarkYellow), Print(&elems), ResetColor).ok(); }
+                _ => {}
+            }
+        } else if idx == 0 {
+            execute!(out, SetForegroundColor(Color::DarkGrey),
+                Print(format!("{} [mort]", enemy.name)), ResetColor).ok();
+        }
+    }
+
+    start_row + rows + 1
 }
 
 fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat) {

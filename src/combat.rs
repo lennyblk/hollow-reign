@@ -44,7 +44,7 @@ impl Combat {
     }
 
     pub fn is_over(&self, player: &Player) -> bool {
-        !player.status.can_act() || self.enemies.iter().all(|e| !e.is_alive())
+        player.hp == 0 || self.enemies.iter().all(|e| !e.is_alive())
     }
 
     pub fn next_turn(&mut self) {

@@ -17,7 +17,7 @@ pub fn time_limit_ms(diff: &Difficulty) -> u64 {
     match diff {
         Difficulty::Short => 4_000,
         Difficulty::Medium => 7_000,
-        Difficulty::Long => 14_000,
+        Difficulty::Long => 22_000,
     }
 }
 
