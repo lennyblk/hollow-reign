@@ -1,4 +1,5 @@
 mod catalog;
+mod updater;
 mod intro_ui;
 mod class;
 mod combat;
@@ -34,6 +35,7 @@ use player::Player;
 use zone::ZoneId;
 
 fn main() {
+    updater::check_and_update();
     let world = World::new();
 
     let has_save = save::save_exists();

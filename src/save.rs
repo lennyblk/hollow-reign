@@ -16,6 +16,7 @@ const SAVE_PATH: &str = "save.json";
 // ─── STRUCTURE DE SAUVEGARDE ─────────────────────────────────────────────────
 
 #[derive(Serialize, Deserialize)]
+#[serde(default)]
 struct SaveData {
     // Joueur
     player_name: String,
@@ -48,6 +49,40 @@ struct SaveData {
     // Quêtes
     active_quests: Vec<String>,
     completed_quests: Vec<String>,
+}
+
+impl Default for SaveData {
+    fn default() -> Self {
+        SaveData {
+            player_name: String::new(),
+            player_class: String::new(),
+            player_hp: 0,
+            player_souls: 0,
+            player_level: 1,
+            stat_vigor: 10,
+            stat_intelligence: 10,
+            stat_faith: 10,
+            stat_dexterity: 10,
+            stat_arcane: 10,
+            stat_mind: 10,
+            stat_strength: 10,
+            player_estus: 3,
+            player_last_grace: None,
+            inventory: vec![],
+            eq_weapon: None,
+            eq_armor: None,
+            eq_shield: None,
+            eq_consumables: vec![],
+            nav_zone: "Ashfeld".to_string(),
+            nav_location_id: 0,
+            nav_opened_chests: vec![],
+            nav_last_locations: vec![],
+            nav_killed_bosses: vec![],
+            visited_graces: vec![],
+            active_quests: vec![],
+            completed_quests: vec![],
+        }
+    }
 }
 
 // ─── SAUVEGARDE ──────────────────────────────────────────────────────────────
