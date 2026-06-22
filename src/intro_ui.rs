@@ -94,11 +94,12 @@ fn draw_class_select(out: &mut io::Stdout, selected: usize) {
     for col in 0..3usize {
         let cx = (col * col_w + 1) as u16;
         let is_sel = col == selected;
-        let color = if is_sel {
-            Color::DarkYellow
-        } else {
-            Color::DarkGrey
+        let sel_color = match col {
+            0 => Color::Rgb { r: 80, g: 140, b: 255 },  // Knight - bleu
+            1 => Color::Rgb { r: 255, g: 140, b: 30 },  // Mage - orange
+            _ => Color::Rgb { r: 60, g: 200, b: 80 },   // Voleur - vert
         };
+        let color = if is_sel { sel_color } else { Color::DarkGrey };
 
         // Nom de classe
         let label = if is_sel {
