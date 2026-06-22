@@ -4,6 +4,8 @@ Hollow Reign is a terminal-based role-playing game written entirely in Rust, ins
 
 The game runs in a terminal and uses the keyboard to navigate, fight and talk to NPCs. There is no graphical interface: everything is rendered in ASCII with colors via crossterm.
 
+<img width="918" height="317" alt="image" src="https://github.com/user-attachments/assets/a5c64834-0899-4532-9dea-a2cabc307ad8" />
+
 ---
 
 ## Features
