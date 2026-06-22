@@ -17,15 +17,31 @@ impl Equipment {
         }
     }
 
-    pub fn equip(&mut self, item: Item) {
-        match item {
-            Item::Weapon(_) => self.weapon = Some(item),
-            Item::Armor(_) => self.armor = Some(item),
-            Item::Shield(_) => self.shield = Some(item),
+    /// Retourne false si l'équipement est refusé (arme 2 mains + bouclier).
+    pub fn equip(&mut self, item: Item) -> bool {
+        match &item {
+            Item::Weapon(w) => {
+                if w.two_handed {
+                    self.shield = None; // retire le bouclier si arme 2 mains
+                }
+                self.weapon = Some(item);
+                true
+            }
+            Item::Armor(_) => { self.armor = Some(item); true }
+            Item::Shield(_) => {
+                // Refuser si arme 2 mains équipée
+                let is_two_handed = self.weapon.as_ref()
+                    .and_then(|i| if let Item::Weapon(w) = i { Some(w.two_handed) } else { None })
+                    .unwrap_or(false);
+                if is_two_handed { return false; }
+                self.shield = Some(item);
+                true
+            }
             Item::Consumable(_) => {
                 if self.consumables.len() < 5 {
                     self.consumables.push(item);
                 }
+                true
             }
         }
     }

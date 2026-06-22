@@ -190,22 +190,22 @@ pub fn load(world: &World) -> Option<(Player, NavigationState)> {
     let mut eq = Equipment::empty();
     if let Some(ref name) = data.eq_weapon {
         if let Some(i) = item_by_name(name) {
-            eq.equip(i);
+            let _ = eq.equip(i);
         }
     }
     if let Some(ref name) = data.eq_armor {
         if let Some(i) = item_by_name(name) {
-            eq.equip(i);
+            let _ = eq.equip(i);
         }
     }
     if let Some(ref name) = data.eq_shield {
         if let Some(i) = item_by_name(name) {
-            eq.equip(i);
+            let _ = eq.equip(i);
         }
     }
     for name in &data.eq_consumables {
         if let Some(i) = item_by_name(name) {
-            eq.equip(i);
+            let _ = eq.equip(i);
         }
     }
     player.equipment.push(eq);

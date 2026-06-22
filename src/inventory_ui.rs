@@ -149,6 +149,13 @@ fn use_or_equip(player: &mut Player, index: usize) -> ItemAction {
             ItemAction::None
         }
     } else if let Some(slot) = slot {
+        // Vérifie si l'équipement est autorisé avant de modifier quoi que ce soit
+        let blocked = matches!(&player.inventory[index], Item::Shield(_))
+            && player.equipment[0].weapon.as_ref()
+                .and_then(|i| if let Item::Weapon(w) = i { Some(w.two_handed) } else { None })
+                .unwrap_or(false);
+        if blocked { return ItemAction::None; }
+
         let item = player.inventory.remove(index);
         let eq   = &mut player.equipment[0];
         let old  = eq.unequip(slot);
