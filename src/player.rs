@@ -100,6 +100,7 @@ impl Player {
     pub fn rest_at_grace(&mut self, grace_id: u32) {
         self.last_grace = Some(grace_id);
         self.visited_graces.insert(grace_id);
+        self.hp = self.stats.max_hp();
         self.estus_charges = self.max_estus();
         self.status = Status::default();
     }

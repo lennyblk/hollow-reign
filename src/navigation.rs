@@ -289,10 +289,15 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, flash: Opt
                     ResetColor,
                 ).ok();
             } else {
+                let max_in_combat: u32 = match state.zone {
+                    ZoneId::Ashfeld | ZoneId::Gravemoor => 3,
+                    _ => 1,
+                };
                 let live: u32 = location.contents.enemies.iter()
                     .filter(|s| s.enemy_type != EnemyType::Boss || !zone_boss_dead)
                     .map(|s| s.count)
-                    .sum();
+                    .sum::<u32>()
+                    .min(max_in_combat);
                 if live > 0 {
                     execute!(
                         out,

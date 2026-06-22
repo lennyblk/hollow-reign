@@ -13,6 +13,35 @@ use crate::player::Player;
 use crate::stats::Stats;
 use crate::zone::ZoneId;
 
+// ─── ART ASCII GRÂCE ─────────────────────────────────────────────────────────
+
+const GRACE_ASCII: &str =
+"                  ░  ░░░
+               ░ ░ ░░░░░  ░   ░░
+              ░░░░░░░▒░░░░░░░ ░
+               ░░░░░░▒░░░░░░░░
+               ░░░░░░░▒▒░░░░░░░
+               ░░░░▒▒▒░▒░▒░░░░░░
+           ░░ ░░░▒▒▒▒░░▒▒▒░░░░░░
+            ░░░▒▒▒▓▒▒░░▒▒▒░▒▒░░
+             ░░░▒▓▓▒░░░▒▒▒▒░░░░
+            ░░▒▒▒▓▓▓▒▒░▒▒▒▒░░░░
+           ░░▒▒▒▓▓▓▓▒▒▒░░▒▒░░░░
+           ░░░▒▒▒▓▓▓▒▒▒▒░▒▒░░▒▒░
+           ░░░▒▒▒▓▓██▓▓▒░▓▓▒▒▒░░
+        ░░░░░░▒▓▓▓▓▓▓█▓▓░▒▓▒▒▓▒▓░
+        ░▒▒▓▒▓░▒▒▒▓▓▓▓█▓▒░▒▒▓██▓░░
+          ░░▒▒░▒▒▓▓█▓▓▓▓▓▒▒█▓▓▒██▓░
+        ░▒▒░░░░▓▓▓██▓▓▓▓▓▓▒███▓▓███▓░
+      ░▒▓▓▓░▒▒░▒▓▓██▓░▒▓█▓▒▒▓████████▒░
+   ░░▒▒██▓▓▒▓▓▒▓▓█▓█▓▓▓▓▓▓█▒▒▓▓███▓▓██▓▒░
+░░░▒▒▒▓▓▒▓▓▓▓▓▓▓███▓▓▓▓▓▓▓▓▓▓▓▓▓███████▓▓▒░
+░░▒▓█▓▓▓▓▓▓███▓██████▓██▓▒▓▒▓▓▓███████▓██▓▒
+  ░░░▓██████▓▓█▓████▓▓▓▓▓▓▒▒▒▓████▓██▓▓▓▒
+    ░░░░░░░▒▓▓▓▓████▓▓▓▓██▓▒▓▓▓██▓▓▒░░▒░░
+            ░▓▓▓▓▒░░▒▒▒▓▒▒░▓█▓▒░░
+                           ░░";
+
 // ─── STATS LEVEL-UP ──────────────────────────────────────────────────────────
 
 const STATS: &[(&str, &str, &str)] = &[
@@ -276,6 +305,16 @@ fn draw_level_up(
         Print("STATISTIQUES"),
         ResetColor,
     ).ok();
+
+    // Âmes + coût niveau suivant
+    let cost = player.soul_cost();
+    execute!(out, MoveTo(sc + 16, 2),
+        SetForegroundColor(Color::DarkYellow), SetAttribute(Attribute::Bold),
+        Print(format!("  ◈ {} ames", player.souls)), ResetColor).ok();
+    execute!(out, MoveTo(sc + 16, 3),
+        SetForegroundColor(if player.souls >= cost { Color::Green } else { Color::Red }),
+        Print(format!("  Cout : {}", cost)), ResetColor).ok();
+
     execute!(
         out,
         MoveTo(sc, 3),
@@ -423,7 +462,7 @@ fn draw_header(out: &mut io::Stdout, grace_name: &str, tw: u16) {
 
 /// Dessine l'art ASCII + infos joueur en colonne gauche. Retourne le nombre de lignes de l'art.
 fn draw_art_and_info(out: &mut io::Stdout, player: &Player, tw: u16) -> u16 {
-    let ascii = player.class.ascii();
+    let ascii = GRACE_ASCII;
     let mut row = 2u16;
 
     for line in ascii.lines() {
