@@ -10,7 +10,7 @@ pub fn check_and_update() {
     execute!(
         out,
         SetForegroundColor(Color::DarkGrey),
-        Print("  Verification des mises a jour..."),
+        Print(format!("  v{}  Verification des mises a jour...", env!("CARGO_PKG_VERSION"))),
         ResetColor
     )
     .ok();
@@ -107,6 +107,14 @@ pub fn check_and_update() {
         }
         Err(e) => {
             println!("  Echec de la mise a jour : {}\r", e);
+            println!("  Appuyez sur une touche...\r");
+            crossterm::terminal::enable_raw_mode().ok();
+            loop {
+                if let Ok(Event::Key(KeyEvent { kind: KeyEventKind::Press, .. })) = event::read() {
+                    break;
+                }
+            }
+            crossterm::terminal::disable_raw_mode().ok();
         }
     }
 }
