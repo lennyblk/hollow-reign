@@ -1,6 +1,4 @@
 mod catalog;
-mod updater;
-mod intro_ui;
 mod class;
 mod combat;
 mod combat_ui;
@@ -9,6 +7,7 @@ mod enemy_catalog;
 mod equipment;
 mod grace;
 mod grace_ui;
+mod intro_ui;
 mod inventory_ui;
 mod item;
 mod map;
@@ -22,6 +21,7 @@ mod save;
 mod stats;
 mod status;
 mod typing;
+mod updater;
 mod zone;
 
 use class::Class;
@@ -42,13 +42,15 @@ fn main() {
     let _title_music = {
         use rodio::{Decoder, OutputStream, Sink, Source};
         use std::io::Cursor;
-        OutputStream::try_default().ok().and_then(|(stream, handle)| {
-            let sink = Sink::try_new(&handle).ok()?;
-            let source = Decoder::new(Cursor::new(TITLE_WAV)).ok()?.repeat_infinite();
-            sink.append(source);
-            sink.set_volume(0.6);
-            Some((stream, sink))
-        })
+        OutputStream::try_default()
+            .ok()
+            .and_then(|(stream, handle)| {
+                let sink = Sink::try_new(&handle).ok()?;
+                let source = Decoder::new(Cursor::new(TITLE_WAV)).ok()?.repeat_infinite();
+                sink.append(source);
+                sink.set_volume(0.6);
+                Some((stream, sink))
+            })
     };
 
     let has_save = save::save_exists();
@@ -205,22 +207,35 @@ fn show_chest_item(item: &item::Item) {
         crossterm::cursor::MoveTo(0, 0),
         Print(format!("══{}{}══\r\n", header, bar)),
         ResetColor,
-    ).ok();
+    )
+    .ok();
 
     let ascii = item.ascii();
     let ascii_lines: Vec<&str> = ascii.lines().collect();
 
     // Strip indent commun
-    let min_indent = ascii_lines.iter()
+    let min_indent = ascii_lines
+        .iter()
         .filter(|l| !l.trim().is_empty())
         .map(|l| l.len() - l.trim_start().len())
         .min()
         .unwrap_or(0);
-    let stripped: Vec<&str> = ascii_lines.iter()
-        .map(|l| if l.len() >= min_indent { &l[min_indent..] } else { l })
+    let stripped: Vec<&str> = ascii_lines
+        .iter()
+        .map(|l| {
+            if l.len() >= min_indent {
+                &l[min_indent..]
+            } else {
+                l
+            }
+        })
         .collect();
 
-    let art_w = stripped.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+    let art_w = stripped
+        .iter()
+        .map(|l| l.chars().count())
+        .max()
+        .unwrap_or(0);
     let art_h = stripped.len() as u16;
     let col = (tw.saturating_sub(art_w as u16)) / 2;
     let row0 = (th.saturating_sub(art_h + 5)) / 2;
@@ -233,7 +248,8 @@ fn show_chest_item(item: &item::Item) {
             SetForegroundColor(Color::DarkYellow),
             Print(line),
             ResetColor,
-        ).ok();
+        )
+        .ok();
     }
 
     // Nom de l'item
@@ -246,7 +262,8 @@ fn show_chest_item(item: &item::Item) {
         SetAttribute(Attribute::Bold),
         Print(name),
         ResetColor,
-    ).ok();
+    )
+    .ok();
 
     // Hint
     let hint = "[ Appuyez sur une touche ]";
@@ -257,11 +274,16 @@ fn show_chest_item(item: &item::Item) {
         SetForegroundColor(Color::DarkGrey),
         Print(hint),
         ResetColor,
-    ).ok();
+    )
+    .ok();
     out.flush().ok();
 
     loop {
-        if let Ok(Event::Key(KeyEvent { kind: KeyEventKind::Press, .. })) = event::read() {
+        if let Ok(Event::Key(KeyEvent {
+            kind: KeyEventKind::Press,
+            ..
+        })) = event::read()
+        {
             break;
         }
     }
@@ -396,7 +418,11 @@ fn start_menu(has_save: bool) -> StartChoice {
             execute!(
                 out,
                 MoveTo(col0, row0 + i as u16),
-                SetForegroundColor(Color::DarkYellow),
+                SetForegroundColor(Color::Rgb {
+                    r: 95,
+                    g: 81,
+                    b: 194
+                }),
                 SetAttribute(Attribute::Bold),
                 Print(line),
                 ResetColor,
