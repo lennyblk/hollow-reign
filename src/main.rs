@@ -38,6 +38,19 @@ fn main() {
     updater::check_and_update();
     let world = World::new();
 
+    const TITLE_WAV: &[u8] = include_bytes!("assets/title.wav");
+    let _title_music = {
+        use rodio::{Decoder, OutputStream, Sink, Source};
+        use std::io::Cursor;
+        OutputStream::try_default().ok().and_then(|(stream, handle)| {
+            let sink = Sink::try_new(&handle).ok()?;
+            let source = Decoder::new(Cursor::new(TITLE_WAV)).ok()?.repeat_infinite();
+            sink.append(source);
+            sink.set_volume(0.6);
+            Some((stream, sink))
+        })
+    };
+
     let has_save = save::save_exists();
     let (mut player, mut state) = match start_menu(has_save) {
         StartChoice::Continue => save::load(&world).unwrap_or_else(|| {
@@ -51,6 +64,8 @@ fn main() {
             new_game(&world, class)
         }
     };
+
+    drop(_title_music);
 
     loop {
         match run_navigation(&world, &mut state) {
@@ -341,20 +356,6 @@ fn start_menu(has_save: bool) -> StartChoice {
         terminal::{self, Clear, ClearType},
     };
     use std::io::{self, Write};
-
-    // ── Musique de titre ──────────────────────────────────────────────────────
-    const TITLE_WAV: &[u8] = include_bytes!("assets/title.wav");
-    let _audio_guard = {
-        use rodio::{Decoder, OutputStream, Sink, Source};
-        use std::io::Cursor;
-        OutputStream::try_default().ok().and_then(|(stream, handle)| {
-            let sink = Sink::try_new(&handle).ok()?;
-            let source = Decoder::new(Cursor::new(TITLE_WAV)).ok()?.repeat_infinite();
-            sink.append(source);
-            sink.set_volume(0.6);
-            Some((stream, sink))
-        })
-    };
 
     const ART: &[&str] = &[
         r" _____                                                             _____ ",
