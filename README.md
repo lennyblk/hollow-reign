@@ -129,7 +129,7 @@ Four NPCs are spread across the zones. Each one offers a quest with a reward.
 
 A prebuilt Windows executable is available on the releases page:
 
-https://github.com/lennyblk/hollow-reign/releases/tag/v1
+https://github.com/lennyblk/hollow-reign/releases
 
 Download `hollow-reign.exe`, place it anywhere and run it from a terminal. No installation required.
 
