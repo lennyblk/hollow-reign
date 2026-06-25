@@ -2,7 +2,9 @@ use crossterm::{
     cursor::{Hide, MoveUp, RestorePosition, SavePosition, Show},
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    style::{Attribute, Color, Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor},
+    style::{
+        Attribute, Color, Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor,
+    },
     terminal::{self, Clear, ClearType},
 };
 use std::io::{self, Write};
@@ -268,7 +270,12 @@ pub fn parry_challenge() -> ParryResult {
     const ZONE_W: usize = ZONE_HALF * 2 + 1;
 
     let range = bar_w.saturating_sub(ZONE_W + ZONE_HALF * 2);
-    let target_col = ZONE_HALF + if range > 0 { rand::random::<usize>() % range } else { 0 };
+    let target_col = ZONE_HALF
+        + if range > 0 {
+            rand::random::<usize>() % range
+        } else {
+            0
+        };
 
     let duration_ms = 3_000u64;
     let start = Instant::now();
@@ -282,13 +289,28 @@ pub fn parry_challenge() -> ParryResult {
         // Curseur qui rebondit 1 fois sur toute la largeur (3s)
         let cycle = (bar_w * 2) as u64;
         let pixel = (elapsed_ms * cycle / duration_ms) % cycle;
-        let cursor_col = if pixel < bar_w as u64 { pixel as usize } else { (cycle - pixel) as usize };
+        let cursor_col = if pixel < bar_w as u64 {
+            pixel as usize
+        } else {
+            (cycle - pixel) as usize
+        };
 
-        draw_parry_bar(&mut out, bar_w, target_col, ZONE_HALF, letter, cursor_col, elapsed_ms, duration_ms);
+        draw_parry_bar(
+            &mut out,
+            bar_w,
+            target_col,
+            ZONE_HALF,
+            letter,
+            cursor_col,
+            elapsed_ms,
+            duration_ms,
+        );
 
         if event::poll(Duration::from_millis(16)).unwrap_or(false) {
             if let Ok(Event::Key(key)) = event::read() {
-                if key.kind != KeyEventKind::Press { continue; }
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
                 match key.code {
                     KeyCode::Char(c) if c == letter || c == letter.to_ascii_uppercase() => {
                         let diff = (cursor_col as i32 - target_col as i32).unsigned_abs() as usize;
@@ -333,10 +355,13 @@ fn draw_parry_bar(
         Clear(ClearType::CurrentLine),
         SetForegroundColor(Color::DarkYellow),
         SetAttribute(Attribute::Bold),
-        Print(format!("  PARRY !  Appuyez sur [{}] quand le curseur est dessus :\r\n",
-            letter.to_ascii_uppercase())),
+        Print(format!(
+            "  PARRY !  Appuyez sur [{}] quand le curseur est dessus :\r\n",
+            letter.to_ascii_uppercase()
+        )),
         ResetColor,
-    ).ok();
+    )
+    .ok();
 
     execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
 
@@ -352,12 +377,17 @@ fn draw_parry_bar(
         if is_cursor && on_zone {
             execute!(
                 out,
-                SetBackgroundColor(Color::Rgb { r: 200, g: 140, b: 0 }),
+                SetBackgroundColor(Color::Rgb {
+                    r: 200,
+                    g: 140,
+                    b: 0
+                }),
                 SetForegroundColor(Color::White),
                 SetAttribute(Attribute::Bold),
                 Print("▌"),
                 ResetColor,
-            ).ok();
+            )
+            .ok();
         } else if is_cursor {
             execute!(
                 out,
@@ -365,19 +395,35 @@ fn draw_parry_bar(
                 SetAttribute(Attribute::Bold),
                 Print("▌"),
                 ResetColor,
-            ).ok();
+            )
+            .ok();
         } else if on_zone {
-            let ch = if is_center { letter.to_ascii_uppercase() } else { ' ' };
+            let ch = if is_center {
+                letter.to_ascii_uppercase()
+            } else {
+                ' '
+            };
             execute!(
                 out,
-                SetBackgroundColor(Color::Rgb { r: 200, g: 140, b: 0 }),
+                SetBackgroundColor(Color::Rgb {
+                    r: 200,
+                    g: 140,
+                    b: 0
+                }),
                 SetForegroundColor(Color::Black),
                 SetAttribute(Attribute::Bold),
                 Print(ch),
                 ResetColor,
-            ).ok();
+            )
+            .ok();
         } else {
-            execute!(out, SetForegroundColor(Color::DarkGrey), Print("░"), ResetColor).ok();
+            execute!(
+                out,
+                SetForegroundColor(Color::DarkGrey),
+                Print("░"),
+                ResetColor
+            )
+            .ok();
         }
     }
 
@@ -394,7 +440,7 @@ fn draw_parry_bar(
 
 /// Choisit aléatoirement entre typing_challenge (40%) et parry_challenge (60%).
 pub fn combat_challenge(phrase: &str, limit_ms: u64, perfect_pct: u64) -> ParryResult {
-    if rand::random::<u8>() < 154 {
+    if rand::random::<u8>() < 80 {
         parry_challenge()
     } else {
         typing_challenge(phrase, limit_ms, perfect_pct)
