@@ -3,6 +3,7 @@ use rand::thread_rng;
 
 // ─── DIFFICULTY ──────────────────────────────────────────────────────────────
 
+#[derive(Clone, Copy)]
 pub enum Difficulty {
     Short,  // Mob
     Medium, // MobLeader / MiniBoss

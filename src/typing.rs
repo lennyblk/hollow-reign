@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use crate::combat::ParryResult;
 use crate::phrases::Difficulty;
+use crate::ui;
 
 // ─── CONFIG PAR DIFFICULTÉ ───────────────────────────────────────────────────
 
@@ -131,7 +132,7 @@ fn redraw(
         Clear(ClearType::CurrentLine),
         SetForegroundColor(Color::DarkYellow),
         SetAttribute(Attribute::Bold),
-        Print("  PARADE !  Tapez la phrase :\r\n"),
+        Print("  ▍PARADE   Tapez la phrase :\r\n"),
         ResetColor,
     )
     .ok();
@@ -221,28 +222,36 @@ fn show_result(out: &mut io::Stdout, result: &ParryResult) {
     }
     execute!(out, RestorePosition).ok();
 
-    let (label, color) = match result {
-        ParryResult::Perfect => ("  >> PARFAIT !   +50% dmg  /  0 dmg recu <<", Color::Cyan),
+    let (label, bg) = match result {
+        ParryResult::Perfect => (
+            "✦ PARFAIT    +50% degats · aucun degat recu",
+            Color::Rgb {
+                r: 90,
+                g: 220,
+                b: 230,
+            },
+        ),
         ParryResult::Good => (
-            "  >> BIEN !       +20% dmg  /  50% dmg recu <<",
-            Color::Yellow,
+            "✔ BIEN       +20% degats · 50% degats recus",
+            Color::Rgb {
+                r: 235,
+                g: 190,
+                b: 70,
+            },
         ),
         ParryResult::Miss => (
-            "  >> RATE !       -30% dmg  /  130% dmg recu <<",
-            Color::Red,
+            "✖ RATE       -30% degats · 130% degats recus",
+            Color::Rgb {
+                r: 235,
+                g: 90,
+                b: 90,
+            },
         ),
     };
 
-    execute!(
-        out,
-        Clear(ClearType::CurrentLine),
-        SetForegroundColor(color),
-        SetAttribute(Attribute::Bold),
-        Print(label),
-        ResetColor,
-        Print("\r\n"),
-    )
-    .ok();
+    execute!(out, Clear(ClearType::CurrentLine), Print("  ")).ok();
+    ui::banner(out, label, bg);
+    execute!(out, Print("\r\n")).ok();
     out.flush().ok();
 
     std::thread::sleep(Duration::from_millis(1_200));
@@ -356,7 +365,7 @@ fn draw_parry_bar(
         SetForegroundColor(Color::DarkYellow),
         SetAttribute(Attribute::Bold),
         Print(format!(
-            "  PARRY !  Appuyez sur [{}] quand le curseur est dessus :\r\n",
+            "  ▍PARRY   Appuyez sur [{}] quand le curseur est dessus :\r\n",
             letter.to_ascii_uppercase()
         )),
         ResetColor,
@@ -483,7 +492,9 @@ impl ComboKey {
 /// Perfect  = séquence complétée sous 55% du temps
 /// Good     = complétée mais plus lentement
 /// Miss     = mauvaise touche (combo brisé) ou temps écoulé
-pub fn combo_challenge() -> ParryResult {
+///
+/// Difficulté : Mob 4 touches/4.5s — Chef/MiniBoss 5 touches/5s — Boss 7 touches/6s
+pub fn combo_challenge(diff: Difficulty) -> ParryResult {
     let mut out = io::stdout();
     terminal::enable_raw_mode().expect("crossterm: raw mode requis");
     execute!(out, Hide).ok();
@@ -492,11 +503,14 @@ pub fn combo_challenge() -> ParryResult {
     out.flush().ok();
     execute!(out, MoveUp(8), SavePosition).ok();
 
-    const SEQ_LEN: usize = 5;
+    let (seq_len, limit_ms) = match diff {
+        Difficulty::Short => (4usize, 4_500u64),
+        Difficulty::Medium => (5, 5_000),
+        Difficulty::Long => (7, 6_000),
+    };
     const PERFECT_PCT: u64 = 55;
-    let limit_ms = 5_000u64;
 
-    let seq: Vec<ComboKey> = (0..SEQ_LEN).map(|_| ComboKey::random()).collect();
+    let seq: Vec<ComboKey> = (0..seq_len).map(|_| ComboKey::random()).collect();
     let mut done = 0usize;
     let start = Instant::now();
 
@@ -522,7 +536,7 @@ pub fn combo_challenge() -> ParryResult {
                     | KeyCode::Right => {
                         if seq[done].matches(&key.code) {
                             done += 1;
-                            if done == SEQ_LEN {
+                            if done == seq_len {
                                 let elapsed_ms = start.elapsed().as_millis() as u64;
                                 draw_combo(&mut out, &seq, done, limit_ms, elapsed_ms);
                                 let pct = elapsed_ms * 100 / limit_ms;
@@ -562,7 +576,7 @@ fn draw_combo(out: &mut io::Stdout, seq: &[ComboKey], done: usize, limit_ms: u64
         Clear(ClearType::CurrentLine),
         SetForegroundColor(Color::DarkYellow),
         SetAttribute(Attribute::Bold),
-        Print("  COMBO !  Reproduisez la séquence (flèches + lettres) :\r\n"),
+        Print("  ▍COMBO   Reproduisez la séquence (flèches + lettres) :\r\n"),
         ResetColor,
     )
     .ok();
@@ -573,23 +587,30 @@ fn draw_combo(out: &mut io::Stdout, seq: &[ComboKey], done: usize, limit_ms: u64
     // Ligne 4 — séquence
     execute!(out, Clear(ClearType::CurrentLine), Print("    ")).ok();
     for (i, key) in seq.iter().enumerate() {
-        let color = if i < done {
-            Color::Green
+        let (bg, fg) = if i < done {
+            (
+                Color::Rgb {
+                    r: 70,
+                    g: 160,
+                    b: 100,
+                },
+                ui::INK,
+            )
         } else if i == done {
-            Color::White
+            (Color::White, ui::INK)
         } else {
-            Color::DarkGrey
+            (ui::KEY_BG, ui::DIM)
         };
         execute!(
             out,
-            SetForegroundColor(color),
-            SetAttribute(Attribute::Bold)
+            SetBackgroundColor(bg),
+            SetForegroundColor(fg),
+            SetAttribute(Attribute::Bold),
+            Print(format!(" {} ", key.symbol())),
+            ResetColor,
+            Print("  "),
         )
         .ok();
-        if i == done {
-            execute!(out, SetAttribute(Attribute::Underlined)).ok();
-        }
-        execute!(out, Print(key.symbol()), ResetColor, Print("   ")).ok();
     }
     execute!(out, Print("\r\n")).ok();
 
@@ -630,10 +651,12 @@ fn draw_combo(out: &mut io::Stdout, seq: &[ComboKey], done: usize, limit_ms: u64
 
 // ─── DODGE CHALLENGE (esquive directionnelle) ────────────────────────────────
 
-/// Perfect  = bonne flèche en moins de 300 ms après la révélation
-/// Good     = bonne flèche dans la fenêtre de 900 ms
+/// Perfect  = bonne flèche très vite après la révélation
+/// Good     = bonne flèche dans la fenêtre
 /// Miss     = mauvaise flèche, flèche pressée pendant la feinte, ou trop tard
-pub fn dodge_challenge() -> ParryResult {
+///
+/// Difficulté : Mob fenêtre 1.1s — Chef/MiniBoss 0.9s — Boss 0.65s
+pub fn dodge_challenge(diff: Difficulty) -> ParryResult {
     let mut out = io::stdout();
     terminal::enable_raw_mode().expect("crossterm: raw mode requis");
     execute!(out, Hide).ok();
@@ -651,8 +674,11 @@ pub fn dodge_challenge() -> ParryResult {
 
     // Durée d'armement aléatoire : impossible d'anticiper
     let windup_ms = 700 + rand::random::<u64>() % 900;
-    const WINDOW_MS: u64 = 900;
-    const PERFECT_MS: u64 = 300;
+    let (window_ms, perfect_ms) = match diff {
+        Difficulty::Short => (1_100u64, 400u64),
+        Difficulty::Medium => (900, 300),
+        Difficulty::Long => (650, 230),
+    };
 
     let start = Instant::now();
     let mut result: Option<ParryResult> = None;
@@ -684,12 +710,12 @@ pub fn dodge_challenge() -> ParryResult {
         let reveal = Instant::now();
         loop {
             let elapsed_ms = reveal.elapsed().as_millis() as u64;
-            if elapsed_ms >= WINDOW_MS {
+            if elapsed_ms >= window_ms {
                 result = Some(ParryResult::Miss);
                 break;
             }
 
-            draw_dodge_reveal(&mut out, dir_label, elapsed_ms, WINDOW_MS);
+            draw_dodge_reveal(&mut out, dir_label, elapsed_ms, window_ms);
 
             if event::poll(Duration::from_millis(16)).unwrap_or(false) {
                 if let Ok(Event::Key(key)) = event::read() {
@@ -699,7 +725,7 @@ pub fn dodge_challenge() -> ParryResult {
                     match key.code {
                         code if code == dir_code => {
                             let t = reveal.elapsed().as_millis() as u64;
-                            result = Some(if t <= PERFECT_MS {
+                            result = Some(if t <= perfect_ms {
                                 ParryResult::Perfect
                             } else {
                                 ParryResult::Good
@@ -740,7 +766,7 @@ fn draw_dodge_windup(out: &mut io::Stdout) {
         Clear(ClearType::CurrentLine),
         SetForegroundColor(Color::DarkYellow),
         SetAttribute(Attribute::Bold),
-        Print("  ESQUIVE !  L'ennemi arme son coup...\r\n"),
+        Print("  ▍ESQUIVE   L'ennemi arme son coup...\r\n"),
         ResetColor,
     )
     .ok();
@@ -773,7 +799,7 @@ fn draw_dodge_reveal(out: &mut io::Stdout, dir_label: &str, elapsed_ms: u64, win
         Clear(ClearType::CurrentLine),
         SetForegroundColor(Color::Red),
         SetAttribute(Attribute::Bold),
-        Print(format!("  ESQUIVEZ !   {}\r\n", dir_label)),
+        Print(format!("  ▍ESQUIVEZ   {}\r\n", dir_label)),
         ResetColor,
     )
     .ok();
@@ -808,12 +834,12 @@ fn draw_dodge_reveal(out: &mut io::Stdout, dir_label: &str, elapsed_ms: u64, win
 // ─── CHALLENGE ALÉATOIRE ─────────────────────────────────────────────────────
 
 /// Choisit aléatoirement le mini-jeu :
-/// parry 30% / combo 25% / esquive 25% / typing 20%.
-pub fn combat_challenge(phrase: &str, limit_ms: u64, perfect_pct: u64) -> ParryResult {
+/// typing 35% / parry 25% / combo 20% / esquive 20%.
+pub fn combat_challenge(phrase: &str, limit_ms: u64, perfect_pct: u64, diff: Difficulty) -> ParryResult {
     match rand::random::<u8>() % 100 {
-        0..=29 => parry_challenge(),
-        30..=54 => combo_challenge(),
-        55..=79 => dodge_challenge(),
+        0..=24 => parry_challenge(),
+        25..=44 => combo_challenge(diff),
+        45..=64 => dodge_challenge(diff),
         _ => typing_challenge(phrase, limit_ms, perfect_pct),
     }
 }

@@ -21,6 +21,7 @@ mod save;
 mod stats;
 mod status;
 mod typing;
+mod ui;
 mod updater;
 mod zone;
 

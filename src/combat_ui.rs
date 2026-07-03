@@ -12,19 +12,70 @@ use crossterm::{
 use crate::combat::Combat;
 use crate::enemy::{Enemy, EnemyType};
 use crate::enemy_catalog::{drops, spawn};
-use crate::inventory_ui::{open_inventory, InventoryResult};
-use crate::item::{Element, Item};
+use crate::inventory_ui::{InventoryResult, open_inventory};
+use crate::item::Item;
 use crate::phrases::{Difficulty, PhrasePool};
 use crate::player::Player;
 use crate::typing::{combat_challenge, perfect_threshold, time_limit_ms};
+use crate::ui::{self, LogKind};
 use crate::zone::{EnemySpawn, ZoneId};
 
 // ─── RÉSULTAT ────────────────────────────────────────────────────────────────
 
 pub enum CombatResult {
-    Victory { items: Vec<Item>, souls: u32, boss_killed: bool },
+    Victory {
+        items: Vec<Item>,
+        souls: u32,
+        boss_killed: bool,
+    },
     Defeat,
     Fled,
+}
+
+// ─── ÉTAT AFFICHÉ (animations) ───────────────────────────────────────────────
+
+/// Valeurs de PV actuellement affichées à l'écran. Elles convergent vers les
+/// vraies valeurs par petits pas → les barres de vie s'animent à chaque coup.
+struct Shown {
+    player: u32,
+    enemies: Vec<u32>,
+}
+
+fn step_toward(shown: &mut u32, actual: u32) -> bool {
+    if *shown == actual {
+        return false;
+    }
+    let diff = shown.abs_diff(actual);
+    let step = (diff / 4).max(1);
+    if *shown > actual {
+        *shown -= step;
+    } else {
+        *shown += step;
+    }
+    true
+}
+
+/// Redessine l'écran en animant les barres de vie vers leur valeur réelle.
+fn draw_animated(
+    out: &mut io::Stdout,
+    player: &Player,
+    combat: &Combat,
+    log: &[(LogKind, String)],
+    turn: u32,
+    zone: ZoneId,
+    shown: &mut Shown,
+) {
+    loop {
+        let mut moving = step_toward(&mut shown.player, player.hp);
+        for (i, e) in combat.enemies.iter().enumerate() {
+            moving |= step_toward(&mut shown.enemies[i], e.hp);
+        }
+        draw_combat(out, player, combat, log, turn, zone, shown);
+        if !moving {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(30));
+    }
 }
 
 // ─── POINT D'ENTRÉE ──────────────────────────────────────────────────────────
@@ -38,7 +89,9 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
     let mut enemies = Vec::new();
     'build: for s in spawns {
         for _ in 0..s.count {
-            if enemies.len() >= max_enemies { break 'build; }
+            if enemies.len() >= max_enemies {
+                break 'build;
+            }
             enemies.push(spawn(zone, s.enemy_type, s.element));
         }
     }
@@ -48,8 +101,13 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
 
     let mut combat = Combat::new(enemies);
     let mut phrases = PhrasePool::new();
-    let mut log: Vec<String> = Vec::new();
+    let mut log: Vec<(LogKind, String)> = Vec::new();
     let mut out = io::stdout();
+
+    let mut shown = Shown {
+        player: player.hp,
+        enemies: combat.enemies.iter().map(|e| e.hp).collect(),
+    };
 
     terminal::enable_raw_mode().ok();
     execute!(out, Hide).ok();
@@ -60,13 +118,21 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
         // Ticks élémentaires en début de tour
         let tick = Combat::tick_player_effects(player);
         if tick > 0 {
-            push_log(&mut log, format!("Effets sur toi : -{} PV", tick));
+            push_log(
+                &mut log,
+                LogKind::Effect,
+                format!("Effets sur toi : -{} PV", tick),
+            );
         }
         for i in 0..combat.enemies.len() {
             let dmg = combat.tick_enemy_effects(i);
             if dmg > 0 {
                 let name = combat.enemies[i].name.clone();
-                push_log(&mut log, format!("{} : -{} PV (effets)", name, dmg));
+                push_log(
+                    &mut log,
+                    LogKind::Effect,
+                    format!("{} : -{} PV (effets)", name, dmg),
+                );
             }
         }
 
@@ -75,86 +141,165 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
         }
 
         // ── Tour du joueur ────────────────────────────────────────────────────
-        draw_combat(&mut out, player, &combat, &log, combat.turn, zone);
+        draw_animated(
+            &mut out,
+            player,
+            &combat,
+            &log,
+            combat.turn,
+            zone,
+            &mut shown,
+        );
 
         if !player.status.can_act() {
-            push_log(&mut log, "Tu es immobilise — tour passe.".to_string());
-            draw_combat(&mut out, player, &combat, &log, combat.turn, zone);
+            push_log(
+                &mut log,
+                LogKind::Info,
+                "Tu es immobilise — tour passe.".to_string(),
+            );
+            draw_animated(
+                &mut out,
+                player,
+                &combat,
+                &log,
+                combat.turn,
+                zone,
+                &mut shown,
+            );
         } else {
             // Vide les events résiduels (typing/parry du tour ennemi)
             while event::poll(Duration::from_millis(0)).unwrap_or(false) {
                 let _ = event::read();
             }
-        'input: loop {
-            if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
-                match code {
-                    // Attaque normale
-                    KeyCode::Char('a') | KeyCode::Char('A') => {
-                        if let Some(target) = select_target(&mut out, &combat) {
-                            let base = base_damage(player);
-                            let dmg = combat.player_attack(target, base);
-                            let name = combat.enemies[target].name.clone();
-                            push_log(&mut log, format!("Tu attaques {} : {} degats.", name, dmg));
-                        }
-                        break 'input;
-                    }
-                    // Attaque spéciale (typing challenge)
-                    KeyCode::Char('s') | KeyCode::Char('S')
-                        if combat.player_elemental_cooldown == 0 =>
-                    {
-                        if let Some(target) = select_target(&mut out, &combat) {
-                            let et = combat.enemies[target].enemy_type;
-                            let diff = enemy_difficulty(et);
-                            let limit = time_limit_ms(&diff);
-                            let pct = perfect_threshold(&diff);
-                            let phrase = phrases.next(diff);
-
-                            // combat_challenge gère enable/disable raw mode lui-même
-                            let parry = combat_challenge(phrase, limit, pct);
-                            // Il a désactivé raw mode — on réactive
-                            terminal::enable_raw_mode().ok();
-                            execute!(out, Hide).ok();
-
-                            let base = base_damage(player);
-                            let (dmg, burst) = combat.player_elemental_attack(player, target, base, parry);
-                            let name = combat.enemies[target].name.clone();
-                            if burst > 0 {
-                                push_log(&mut log, format!("Attaque speciale sur {} : {} dmg + {} burst!", name, dmg, burst));
-                            } else {
-                                push_log(&mut log, format!("Attaque speciale sur {} : {} degats.", name, dmg));
+            'input: loop {
+                if let Ok(Event::Key(KeyEvent {
+                    code,
+                    kind: KeyEventKind::Press,
+                    ..
+                })) = event::read()
+                {
+                    match code {
+                        // Attaque normale
+                        KeyCode::Char('a') | KeyCode::Char('A') => {
+                            if let Some(target) = select_target(&mut out, &combat) {
+                                let base = base_damage(player);
+                                let dmg = combat.player_attack(target, base);
+                                let name = combat.enemies[target].name.clone();
+                                push_log(
+                                    &mut log,
+                                    LogKind::PlayerHit,
+                                    format!("Tu attaques {} : {} degats.", name, dmg),
+                                );
+                                draw_animated(
+                                    &mut out,
+                                    player,
+                                    &combat,
+                                    &log,
+                                    combat.turn,
+                                    zone,
+                                    &mut shown,
+                                );
                             }
-                        }
-                        break 'input;
-                    }
-                    // Estus
-                    KeyCode::Char('h') | KeyCode::Char('H')
-                        if player.estus_charges > 0 =>
-                    {
-                        player.use_estus();
-                        push_log(&mut log, "Tu bois une fiole d'estus.".to_string());
-                        break 'input;
-                    }
-                    // Inventaire plein écran — ne consomme le tour QUE si consommable utilisé
-                    KeyCode::Char('i') | KeyCode::Char('I') => {
-                        // open_inventory gère son propre raw mode (enable + disable)
-                        let inv_result = open_inventory(&mut out, player, false);
-                        // Il a désactivé raw mode — on réactive pour le combat
-                        terminal::enable_raw_mode().ok();
-                        execute!(out, Hide).ok();
-                        // Redessine le combat par-dessus
-                        draw_combat(&mut out, player, &combat, &log, combat.turn, zone);
-                        if let InventoryResult::ConsumedItem = inv_result {
                             break 'input;
                         }
+                        // Attaque spéciale (mini-jeu)
+                        KeyCode::Char('s') | KeyCode::Char('S')
+                            if combat.player_elemental_cooldown == 0 =>
+                        {
+                            if let Some(target) = select_target(&mut out, &combat) {
+                                let et = combat.enemies[target].enemy_type;
+                                let diff = enemy_difficulty(et);
+                                let limit = time_limit_ms(&diff);
+                                let pct = perfect_threshold(&diff);
+                                let phrase = phrases.next(diff);
+
+                                // combat_challenge gère enable/disable raw mode lui-même
+                                let parry = combat_challenge(phrase, limit, pct, diff);
+                                // Il a désactivé raw mode — on réactive
+                                terminal::enable_raw_mode().ok();
+                                execute!(out, Hide).ok();
+
+                                let base = base_damage(player);
+                                let (dmg, burst) =
+                                    combat.player_elemental_attack(player, target, base, parry);
+                                let name = combat.enemies[target].name.clone();
+                                if burst > 0 {
+                                    push_log(
+                                        &mut log,
+                                        LogKind::PlayerHit,
+                                        format!(
+                                            "Attaque speciale sur {} : {} dmg + {} burst!",
+                                            name, dmg, burst
+                                        ),
+                                    );
+                                } else {
+                                    push_log(
+                                        &mut log,
+                                        LogKind::PlayerHit,
+                                        format!("Attaque speciale sur {} : {} degats.", name, dmg),
+                                    );
+                                }
+                                draw_animated(
+                                    &mut out,
+                                    player,
+                                    &combat,
+                                    &log,
+                                    combat.turn,
+                                    zone,
+                                    &mut shown,
+                                );
+                            }
+                            break 'input;
+                        }
+                        // Estus
+                        KeyCode::Char('h') | KeyCode::Char('H') if player.estus_charges > 0 => {
+                            player.use_estus();
+                            push_log(
+                                &mut log,
+                                LogKind::Heal,
+                                "Tu bois une fiole d'estus.".to_string(),
+                            );
+                            draw_animated(
+                                &mut out,
+                                player,
+                                &combat,
+                                &log,
+                                combat.turn,
+                                zone,
+                                &mut shown,
+                            );
+                            break 'input;
+                        }
+                        // Inventaire plein écran — ne consomme le tour QUE si consommable utilisé
+                        KeyCode::Char('i') | KeyCode::Char('I') => {
+                            // open_inventory gère son propre raw mode (enable + disable)
+                            let inv_result = open_inventory(&mut out, player, false);
+                            // Il a désactivé raw mode — on réactive pour le combat
+                            terminal::enable_raw_mode().ok();
+                            execute!(out, Hide).ok();
+                            // Redessine le combat par-dessus
+                            draw_animated(
+                                &mut out,
+                                player,
+                                &combat,
+                                &log,
+                                combat.turn,
+                                zone,
+                                &mut shown,
+                            );
+                            if let InventoryResult::ConsumedItem = inv_result {
+                                break 'input;
+                            }
+                        }
+                        // Fuite
+                        KeyCode::Char('f') | KeyCode::Char('F') => {
+                            break 'main CombatResult::Fled;
+                        }
+                        _ => {}
                     }
-                    // Fuite
-                    KeyCode::Char('f') | KeyCode::Char('F') => {
-                        break 'main CombatResult::Fled;
-                    }
-                    _ => {}
                 }
             }
-        } } // end if can_act / 'input
+        } // end if can_act / 'input
 
         if combat.is_over(player) {
             break 'main end_result(player, &combat, zone);
@@ -169,26 +314,48 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
             let et = combat.enemies[i].enemy_type;
 
             if combat.turn % 3 == 0 {
-                // Attaque élémentaire → typing challenge pour le joueur
+                // Attaque élémentaire → mini-jeu pour le joueur
                 let diff = enemy_difficulty(et);
                 let limit = time_limit_ms(&diff);
                 let pct = perfect_threshold(&diff);
                 let phrase = phrases.next(diff);
 
-                let parry = combat_challenge(phrase, limit, pct);
+                let parry = combat_challenge(phrase, limit, pct, diff);
                 terminal::enable_raw_mode().ok();
                 execute!(out, Hide).ok();
 
                 let dmg = combat.enemy_elemental_attack(player, i, parry);
-                push_log(&mut log, format!("{} attaque elementaire : -{} PV.", name, dmg));
+                push_log(
+                    &mut log,
+                    LogKind::EnemyHit,
+                    format!("{} attaque elementaire : -{} PV.", name, dmg),
+                );
             } else {
                 let dmg = combat.enemy_attack(player, i);
                 if dmg > 0 {
-                    push_log(&mut log, format!("{} attaque : -{} PV.", name, dmg));
+                    push_log(
+                        &mut log,
+                        LogKind::EnemyHit,
+                        format!("{} attaque : -{} PV.", name, dmg),
+                    );
                 } else {
-                    push_log(&mut log, format!("{} attaque mais rate.", name));
+                    push_log(
+                        &mut log,
+                        LogKind::Info,
+                        format!("{} attaque mais rate.", name),
+                    );
                 }
             }
+            // Chaque coup ennemi se voit à l'écran (barre qui descend)
+            draw_animated(
+                &mut out,
+                player,
+                &combat,
+                &log,
+                combat.turn,
+                zone,
+                &mut shown,
+            );
 
             if player.hp == 0 || !player.status.can_act() {
                 break;
@@ -201,7 +368,15 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
     };
 
     // Affiche l'état final 1.5s
-    draw_combat(&mut out, player, &combat, &log, combat.turn, zone);
+    draw_animated(
+        &mut out,
+        player,
+        &combat,
+        &log,
+        combat.turn,
+        zone,
+        &mut shown,
+    );
     std::thread::sleep(Duration::from_millis(1_500));
 
     execute!(out, Show).ok();
@@ -214,9 +389,10 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
 
 fn end_result(player: &Player, combat: &Combat, zone: ZoneId) -> CombatResult {
     if player.hp > 0 {
-        let boss_killed = combat.enemies.iter().any(|e| {
-            e.enemy_type == EnemyType::Boss && !e.is_alive()
-        });
+        let boss_killed = combat
+            .enemies
+            .iter()
+            .any(|e| e.enemy_type == EnemyType::Boss && !e.is_alive());
         CombatResult::Victory {
             souls: combat.collect_souls(),
             items: collect_drops(combat, zone),
@@ -245,7 +421,9 @@ fn collect_drops(combat: &Combat, zone: ZoneId) -> Vec<Item> {
 /// 2-3 ennemis vivants → affiche un prompt [1][2][3] et attend une touche.
 /// [Esc] → annule (retourne None).
 fn select_target(out: &mut io::Stdout, combat: &Combat) -> Option<usize> {
-    let alive: Vec<(usize, &str)> = combat.enemies.iter()
+    let alive: Vec<(usize, &str)> = combat
+        .enemies
+        .iter()
         .enumerate()
         .filter(|(_, e)| e.is_alive())
         .map(|(i, e)| (i, e.name.as_str()))
@@ -264,29 +442,29 @@ fn select_target(out: &mut io::Stdout, combat: &Combat) -> Option<usize> {
         Print("\r\n  "),
         SetForegroundColor(Color::White),
         SetAttribute(Attribute::Bold),
-        Print("Cible : "),
+        Print("Cible :  "),
         ResetColor,
-    ).ok();
+    )
+    .ok();
     for (n, (_, name)) in alive.iter().enumerate() {
-        execute!(
-            out,
-            SetForegroundColor(Color::DarkYellow),
-            SetAttribute(Attribute::Bold),
-            Print(format!("[{}]", n + 1)),
-            ResetColor,
-            Print(format!(" {}  ", name)),
-        ).ok();
+        ui::keycap(out, &format!("{}", n + 1), name, true);
     }
     execute!(
         out,
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print("[Esc] Annuler\r\n"),
         ResetColor,
-    ).ok();
+    )
+    .ok();
     out.flush().ok();
 
     loop {
-        if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
+        if let Ok(Event::Key(KeyEvent {
+            code,
+            kind: KeyEventKind::Press,
+            ..
+        })) = event::read()
+        {
             match code {
                 KeyCode::Char(c) if c.is_ascii_digit() => {
                     let n = (c as usize).saturating_sub('1' as usize);
@@ -307,12 +485,36 @@ fn base_damage(player: &Player) -> u32 {
 
 fn zone_enemy_color(zone: ZoneId) -> Color {
     match zone {
-        ZoneId::Ashfeld    => Color::Rgb { r: 180, g: 40,  b: 40  }, // saignement
-        ZoneId::Gravemoor  => Color::Rgb { r: 60,  g: 180, b: 60  }, // poison
-        ZoneId::Rotwood    => Color::Rgb { r: 100, g: 140, b: 30  }, // pourriture
-        ZoneId::TheCinders => Color::Rgb { r: 220, g: 100, b: 20  }, // feu
-        ZoneId::Frostveil  => Color::Rgb { r: 60,  g: 200, b: 220 }, // glace
-        ZoneId::TheVoid    => Color::Rgb { r: 150, g: 40,  b: 200 }, // void
+        ZoneId::Ashfeld => Color::Rgb {
+            r: 180,
+            g: 40,
+            b: 40,
+        }, // saignement
+        ZoneId::Gravemoor => Color::Rgb {
+            r: 60,
+            g: 180,
+            b: 60,
+        }, // poison
+        ZoneId::Rotwood => Color::Rgb {
+            r: 100,
+            g: 140,
+            b: 30,
+        }, // pourriture
+        ZoneId::TheCinders => Color::Rgb {
+            r: 220,
+            g: 100,
+            b: 20,
+        }, // feu
+        ZoneId::Frostveil => Color::Rgb {
+            r: 60,
+            g: 200,
+            b: 220,
+        }, // glace
+        ZoneId::TheVoid => Color::Rgb {
+            r: 150,
+            g: 40,
+            b: 200,
+        }, // void
     }
 }
 
@@ -324,78 +526,122 @@ fn enemy_difficulty(et: EnemyType) -> Difficulty {
     }
 }
 
-fn push_log(log: &mut Vec<String>, msg: String) {
-    log.push(msg);
+fn push_log(log: &mut Vec<(LogKind, String)>, kind: LogKind, msg: String) {
+    log.push((kind, msg));
     if log.len() > 6 {
         log.remove(0);
     }
 }
 
-fn hp_color(current: u32, max: u32) -> Color {
-    if max == 0 { return Color::DarkGrey; }
-    let pct = current * 100 / max;
-    if pct > 60 { Color::Green }
-    else if pct > 30 { Color::Yellow }
-    else { Color::Red }
+/// Badges des éléments d'un ennemi, séparés par un espace.
+fn print_element_badges(out: &mut io::Stdout, enemy: &Enemy) {
+    for (i, el) in enemy.elements.iter().enumerate() {
+        if i > 0 {
+            execute!(out, Print(" ")).ok();
+        }
+        ui::badge(out, ui::element_label(el), ui::element_color(el));
+    }
 }
 
-/// Imprime une barre de vie colorée directement dans stdout.
-fn print_hp_bar(out: &mut io::Stdout, current: u32, max: u32, width: usize) {
-    let filled = if max == 0 { 0 } else { (current as usize * width / max as usize).min(width) };
-    let empty = width - filled;
-    let color = hp_color(current, max);
+/// Charges d'estus en pips : ◆◆◇ + âmes.
+fn print_estus_souls(out: &mut io::Stdout, player: &Player) {
     execute!(
         out,
-        Print("["),
-        SetForegroundColor(color),
-        Print("█".repeat(filled)),
+        SetForegroundColor(ui::DIM),
+        Print("Estus "),
+        ResetColor
+    )
+    .ok();
+    let max = player.max_estus();
+    for i in 0..max.min(10) {
+        if i < player.estus_charges {
+            execute!(
+                out,
+                SetForegroundColor(Color::Rgb {
+                    r: 240,
+                    g: 180,
+                    b: 60
+                }),
+                Print("◆"),
+                ResetColor
+            )
+            .ok();
+        } else {
+            execute!(out, SetForegroundColor(ui::TRACK), Print("◇"), ResetColor).ok();
+        }
+    }
+    execute!(
+        out,
+        SetForegroundColor(ui::DIM),
+        Print("   Ames "),
         ResetColor,
-        SetForegroundColor(Color::DarkGrey),
-        Print("░".repeat(empty)),
+        SetForegroundColor(Color::Rgb {
+            r: 240,
+            g: 180,
+            b: 60
+        }),
+        SetAttribute(Attribute::Bold),
+        Print(format!("{}", player.souls)),
         ResetColor,
-        Print("]"),
-    ).ok();
+    )
+    .ok();
 }
 
-fn element_label(e: &Element) -> &'static str {
-    match e {
-        Element::Fire      => "Feu",
-        Element::Ice       => "Glace",
-        Element::Lightning => "Foudre",
-        Element::Bleed     => "Saignement",
-        Element::Poison    => "Poison",
-        Element::Rot       => "Pourriture",
+/// Ligne d'état du spécial : ● PRET / ◌ n tour(s).
+fn print_special_status(out: &mut io::Stdout, cooldown: u32) {
+    if cooldown > 0 {
+        execute!(
+            out,
+            SetForegroundColor(ui::DIM),
+            Print(format!("◌ Special dans {} tour(s)", cooldown)),
+            ResetColor,
+        )
+        .ok();
+    } else {
+        execute!(
+            out,
+            SetForegroundColor(Color::Rgb {
+                r: 95,
+                g: 210,
+                b: 120
+            }),
+            SetAttribute(Attribute::Bold),
+            Print("● Special PRET"),
+            ResetColor,
+        )
+        .ok();
     }
 }
 
 // ─── RENDU ───────────────────────────────────────────────────────────────────
 
-fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[String], turn: u32, zone: ZoneId) {
+fn draw_combat(
+    out: &mut io::Stdout,
+    player: &Player,
+    combat: &Combat,
+    log: &[(LogKind, String)],
+    turn: u32,
+    zone: ZoneId,
+    shown: &Shown,
+) {
     let (tw, _) = terminal::size().unwrap_or((80, 24));
     let w = tw as usize;
     execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
 
     let ec = zone_enemy_color(zone);
 
-    // ── En-tête ───────────────────────────────────────────────────────────────
-    let header = format!("  Combat — Tour {}  ", turn);
-    let bar_len = w.saturating_sub(header.len() + 4);
-    execute!(
-        out,
-        SetForegroundColor(ec),
-        SetAttribute(Attribute::Bold),
-        Print(format!("══{}{}══\r\n\r\n", header, "═".repeat(bar_len))),
-        ResetColor,
-    ).ok();
+    // ── En-tête (occupe les lignes 0-2) ──────────────────────────────────────
+    ui::screen_header(out, "COMBAT", &format!("Tour {}", turn), ec, w);
+    execute!(out, Print("\r\n")).ok();
 
-    // ── Affichage combattants ─────────────────────────────────────────────────
+    // ── Affichage combattants (à partir de la ligne 4) ────────────────────────
     let next_row = if combat.enemies.len() == 1 {
-        draw_1v1_side_by_side(out, player, &combat.enemies[0], combat, 2, w, ec)
+        draw_1v1_side_by_side(out, player, &combat.enemies[0], combat, 4, w, ec, shown)
     } else {
-        let nr = draw_enemies_columns(out, combat, 2, w, ec);
+        let nr = draw_enemies_columns(out, combat, 4, w, ec, shown);
         execute!(out, MoveTo(0, nr)).ok();
         separator(out, w); // 3 lignes
-        let player_rows = draw_player_block(out, player, combat);
+        let player_rows = draw_player_block(out, player, combat, shown);
         nr + 3 + player_rows
     };
     execute!(out, MoveTo(0, next_row)).ok();
@@ -403,16 +649,36 @@ fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[St
     // ── Séparateur ────────────────────────────────────────────────────────────
     separator(out, w);
 
-    // ── Log ───────────────────────────────────────────────────────────────────
+    // ── Journal (dernière ligne en clair, anciennes atténuées) ────────────────
     if !log.is_empty() {
         execute!(out, Print("\r\n")).ok();
-        for line in log {
+        for (idx, (kind, line)) in log.iter().enumerate() {
+            let is_last = idx == log.len() - 1;
             execute!(
                 out,
-                SetForegroundColor(Color::Grey),
-                Print(format!("  > {}\r\n", line)),
+                SetForegroundColor(kind.color()),
+                Print(format!("  {} ", kind.icon())),
                 ResetColor,
-            ).ok();
+            )
+            .ok();
+            if is_last {
+                execute!(
+                    out,
+                    SetForegroundColor(Color::White),
+                    SetAttribute(Attribute::Bold),
+                    Print(format!("{}\r\n", line)),
+                    ResetColor,
+                )
+                .ok();
+            } else {
+                execute!(
+                    out,
+                    SetForegroundColor(ui::DIM),
+                    Print(format!("{}\r\n", line)),
+                    ResetColor,
+                )
+                .ok();
+            }
         }
         execute!(out, Print("\r\n")).ok();
     }
@@ -420,58 +686,132 @@ fn draw_combat(out: &mut io::Stdout, player: &Player, combat: &Combat, log: &[St
     // ── Séparateur ────────────────────────────────────────────────────────────
     separator(out, w);
 
-    // ── Actions ───────────────────────────────────────────────────────────────
+    // ── Actions (keycaps) ─────────────────────────────────────────────────────
     execute!(out, Print("  ")).ok();
-    print_action(out, "A", "Attaquer", true);
-    print_action(out, "S", "Special", combat.player_elemental_cooldown == 0);
-    print_action(out, "H", &format!("Estus ({})", player.estus_charges), player.estus_charges > 0);
-    print_action(out, "I", "Inventaire", true);
-    print_action(out, "F", "Fuir", true);
-    execute!(out, Print("\r\n")).ok();
+    ui::keycap(out, "A", "Attaquer", true);
+    ui::keycap(out, "S", "Special", combat.player_elemental_cooldown == 0);
+    ui::keycap(
+        out,
+        "H",
+        &format!("Estus ({})", player.estus_charges),
+        player.estus_charges > 0,
+    );
+    ui::keycap(out, "I", "Inventaire", true);
+    ui::keycap(out, "F", "Fuir", true);
+    execute!(out, Print("\r\n\r\n")).ok();
 
     // ── Cycle élémentaire ─────────────────────────────────────────────────────
     execute!(
         out,
-        SetForegroundColor(Color::DarkGrey),
-        Print("  Cycle : "),
+        SetForegroundColor(ui::DIM),
+        Print("  Cycle  "),
         ResetColor,
-    ).ok();
+    )
+    .ok();
     let cycle = [
-        ("Feu",         Color::Red),
-        ("Glace",       Color::Cyan),
-        ("Foudre",      Color::Yellow),
-        ("Saignement",  Color::DarkRed),
-        ("Poison",      Color::Green),
-        ("Pourriture",  Color::DarkGreen),
+        (
+            "Feu",
+            Color::Rgb {
+                r: 235,
+                g: 110,
+                b: 50,
+            },
+        ),
+        (
+            "Glace",
+            Color::Rgb {
+                r: 90,
+                g: 200,
+                b: 230,
+            },
+        ),
+        (
+            "Foudre",
+            Color::Rgb {
+                r: 240,
+                g: 220,
+                b: 90,
+            },
+        ),
+        (
+            "Saignement",
+            Color::Rgb {
+                r: 205,
+                g: 65,
+                b: 75,
+            },
+        ),
+        (
+            "Poison",
+            Color::Rgb {
+                r: 110,
+                g: 200,
+                b: 90,
+            },
+        ),
+        (
+            "Pourriture",
+            Color::Rgb {
+                r: 145,
+                g: 165,
+                b: 60,
+            },
+        ),
     ];
     for (i, (name, color)) in cycle.iter().enumerate() {
-        execute!(out, SetForegroundColor(*color), Print(name), ResetColor).ok();
+        execute!(out, SetForegroundColor(*color), Print(*name), ResetColor).ok();
         if i < cycle.len() - 1 {
-            execute!(out, SetForegroundColor(Color::DarkGrey), Print(" > "), ResetColor).ok();
+            execute!(
+                out,
+                SetForegroundColor(ui::HAIRLINE),
+                Print(" › "),
+                ResetColor
+            )
+            .ok();
         }
     }
     execute!(
         out,
-        SetForegroundColor(Color::DarkGrey),
-        Print(" > Feu   (+50% / -25%)\r\n"),
+        SetForegroundColor(ui::DIM),
+        Print(" › Feu   (+50% / -25%)\r\n"),
         ResetColor,
-    ).ok();
+    )
+    .ok();
 
     out.flush().ok();
 }
 
 /// Affiche tous les ennemis côte à côte en colonnes égales.
 /// Retourne la prochaine ligne libre après le bloc ennemis.
-fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w: usize, ec: Color) -> u16 {
+fn draw_enemies_columns(
+    out: &mut io::Stdout,
+    combat: &Combat,
+    start_row: u16,
+    w: usize,
+    ec: Color,
+    shown: &Shown,
+) -> u16 {
     let n = combat.enemies.len();
-    if n == 0 { return start_row; }
+    if n == 0 {
+        return start_row;
+    }
 
     let col_w = w / n;
 
-    let max_h: u16 = combat.enemies.iter().map(|e| {
-        if !e.is_alive() { 1u16 }
-        else { e.ascii.lines().count().max(3) as u16 }
-    }).max().unwrap_or(1);
+    let max_h: u16 = combat
+        .enemies
+        .iter()
+        .enumerate()
+        .map(|(i, e)| {
+            // Un ennemi mort reste affiché tant que sa barre n'a pas fini de descendre
+            if !e.is_alive() && shown.enemies[i] == 0 {
+                1u16
+            } else {
+                e.ascii.lines().count().max(3) as u16
+            }
+        })
+        .max()
+        .unwrap_or(1);
 
     for row in 0..max_h {
         for (ci, e) in combat.enemies.iter().enumerate() {
@@ -479,43 +819,57 @@ fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w
             let y = start_row + row;
             execute!(out, MoveTo(x, y)).ok();
 
-            if !e.is_alive() {
+            let visually_alive = e.is_alive() || shown.enemies[ci] > 0;
+            if !visually_alive {
                 if row == 0 {
                     execute!(
                         out,
-                        SetForegroundColor(Color::DarkGrey),
-                        Print(format!("{} [mort]", e.name)),
+                        SetForegroundColor(ui::DIM),
+                        Print(format!("✝ {}", e.name)),
                         ResetColor,
-                    ).ok();
+                    )
+                    .ok();
                 }
                 continue;
             }
 
             let ascii_lines: Vec<&str> = e.ascii.lines().collect();
             // Strip padding commun pour éviter overflow
-            let min_indent = ascii_lines.iter()
+            let min_indent = ascii_lines
+                .iter()
                 .filter(|l| !l.trim().is_empty())
                 .map(|l| l.len() - l.trim_start().len())
                 .min()
                 .unwrap_or(0);
             let max_art_w = col_w.saturating_sub(4); // marge stats
-            let ascii_w = ascii_lines.iter()
-                .map(|l| if l.len() >= min_indent { l[min_indent..].chars().count() } else { 0 })
+            let ascii_w = ascii_lines
+                .iter()
+                .map(|l| {
+                    if l.len() >= min_indent {
+                        l[min_indent..].chars().count()
+                    } else {
+                        0
+                    }
+                })
                 .max()
                 .unwrap_or(0)
                 .min(max_art_w);
-            let elems: String = e.elements.iter().map(|el| element_label(el)).collect::<Vec<_>>().join("/");
 
             // Colonne ASCII
             if let Some(line) = ascii_lines.get(row as usize) {
-                let stripped = if line.len() >= min_indent { &line[min_indent..] } else { line };
+                let stripped = if line.len() >= min_indent {
+                    &line[min_indent..]
+                } else {
+                    line
+                };
                 let clipped: String = stripped.chars().take(ascii_w).collect();
                 execute!(
                     out,
                     SetForegroundColor(ec),
                     Print(format!("{:<ascii_w$}", clipped)),
                     ResetColor,
-                ).ok();
+                )
+                .ok();
             } else if ascii_w > 0 {
                 execute!(out, Print(" ".repeat(ascii_w))).ok();
             }
@@ -526,28 +880,22 @@ fn draw_enemies_columns(out: &mut io::Stdout, combat: &Combat, start_row: u16, w
 
             // Stats (3 premières lignes)
             match row as usize {
-                0 => { execute!(
-                    out,
-                    SetForegroundColor(ec),
-                    SetAttribute(Attribute::Bold),
-                    Print(&e.name),
-                    ResetColor,
-                ).ok(); }
-                1 => {
-                    print_hp_bar(out, e.hp, e.max_hp, 14);
+                0 => {
                     execute!(
                         out,
-                        SetForegroundColor(hp_color(e.hp, e.max_hp)),
-                        Print(format!(" {:>3}/{:<3}", e.hp, e.max_hp)),
+                        SetForegroundColor(ec),
+                        SetAttribute(Attribute::Bold),
+                        Print(&e.name),
                         ResetColor,
-                    ).ok();
+                    )
+                    .ok();
                 }
-                2 => { execute!(
-                    out,
-                    SetForegroundColor(Color::DarkYellow),
-                    Print(&elems),
-                    ResetColor,
-                ).ok(); }
+                1 => {
+                    ui::hp_bar(out, shown.enemies[ci], e.max_hp, 14);
+                }
+                2 => {
+                    print_element_badges(out, e);
+                }
                 _ => {}
             }
         }
@@ -564,6 +912,7 @@ fn draw_1v1_side_by_side(
     start_row: u16,
     tw: usize,
     ec: Color,
+    shown: &Shown,
 ) -> u16 {
     let mid = (tw / 2) as u16;
     let max_hp = player.stats.max_hp();
@@ -572,22 +921,35 @@ fn draw_1v1_side_by_side(
     let e_ascii: Vec<&str> = enemy.ascii.lines().collect();
 
     // strip common indent from enemy art
-    let e_indent = e_ascii.iter()
+    let e_indent = e_ascii
+        .iter()
         .filter(|l| !l.trim().is_empty())
         .map(|l| l.len() - l.trim_start().len())
-        .min().unwrap_or(0);
+        .min()
+        .unwrap_or(0);
 
-    let p_art_w = p_ascii.iter().map(|l| l.chars().count()).max().unwrap_or(0)
+    let p_art_w = p_ascii
+        .iter()
+        .map(|l| l.chars().count())
+        .max()
+        .unwrap_or(0)
         .min(mid as usize - 6);
-    let e_art_w = e_ascii.iter()
-        .map(|l| if l.len() >= e_indent { l[e_indent..].chars().count() } else { 0 })
-        .max().unwrap_or(0)
+    let e_art_w = e_ascii
+        .iter()
+        .map(|l| {
+            if l.len() >= e_indent {
+                l[e_indent..].chars().count()
+            } else {
+                0
+            }
+        })
+        .max()
+        .unwrap_or(0)
         .min(mid as usize - 6);
-
-    let elems: String = enemy.elements.iter()
-        .map(|el| element_label(el)).collect::<Vec<_>>().join("/");
 
     let rows = p_ascii.len().max(e_ascii.len()).max(4) as u16;
+
+    let enemy_visually_alive = enemy.is_alive() || shown.enemies[0] > 0;
 
     for i in 0..rows {
         let idx = i as usize;
@@ -597,65 +959,98 @@ fn draw_1v1_side_by_side(
         execute!(out, MoveTo(2, start_row + i)).ok();
         let p_line = p_ascii.get(idx).copied().unwrap_or("");
         let p_clipped: String = p_line.chars().take(p_art_w).collect();
-        execute!(out,
-            SetForegroundColor(pc), SetAttribute(Attribute::Bold),
-            Print(format!("{:<p_art_w$}", p_clipped)), ResetColor,
-            Print("  ")).ok();
+        execute!(
+            out,
+            SetForegroundColor(pc),
+            SetAttribute(Attribute::Bold),
+            Print(format!("{:<p_art_w$}", p_clipped)),
+            ResetColor,
+            Print("  ")
+        )
+        .ok();
         match idx {
-            0 => { execute!(out, SetForegroundColor(pc), SetAttribute(Attribute::Bold), Print(&player.name), ResetColor).ok(); }
-            1 => {
-                print_hp_bar(out, player.hp, max_hp, 16);
-                execute!(out, SetForegroundColor(hp_color(player.hp, max_hp)),
-                    Print(format!(" {:>3}/{:<3}", player.hp, max_hp)), ResetColor).ok();
+            0 => {
+                execute!(
+                    out,
+                    SetForegroundColor(pc),
+                    SetAttribute(Attribute::Bold),
+                    Print(&player.name),
+                    ResetColor
+                )
+                .ok();
             }
-            2 => { execute!(out, SetForegroundColor(Color::Yellow),
-                Print(format!("Estus {}/{}  Ames: {}", player.estus_charges, player.max_estus(), player.souls)),
-                ResetColor).ok(); }
+            1 => {
+                ui::hp_bar(out, shown.player, max_hp, 16);
+            }
+            2 => {
+                print_estus_souls(out, player);
+            }
             3 => {
-                if combat.player_elemental_cooldown > 0 {
-                    execute!(out, SetForegroundColor(Color::DarkGrey),
-                        Print(format!("Special: {} tour(s)", combat.player_elemental_cooldown)), ResetColor).ok();
-                } else {
-                    execute!(out, SetForegroundColor(Color::Green), SetAttribute(Attribute::Bold),
-                        Print("Special: PRET !"), ResetColor).ok();
-                }
+                print_special_status(out, combat.player_elemental_cooldown);
             }
             _ => {}
         }
 
         // ── Ennemi (droite) ──────────────────────────────────────────────────
         execute!(out, MoveTo(mid + 2, start_row + i)).ok();
-        if enemy.is_alive() {
+        if enemy_visually_alive {
             let e_line = e_ascii.get(idx).copied().unwrap_or("");
-            let stripped = if e_line.len() >= e_indent { &e_line[e_indent..] } else { e_line };
+            let stripped = if e_line.len() >= e_indent {
+                &e_line[e_indent..]
+            } else {
+                e_line
+            };
             let e_clipped: String = stripped.chars().take(e_art_w).collect();
-            execute!(out,
+            execute!(
+                out,
                 SetForegroundColor(ec),
-                Print(format!("{:<e_art_w$}", e_clipped)), ResetColor,
-                Print("  ")).ok();
+                Print(format!("{:<e_art_w$}", e_clipped)),
+                ResetColor,
+                Print("  ")
+            )
+            .ok();
             match idx {
-                0 => { execute!(out, SetForegroundColor(ec), SetAttribute(Attribute::Bold), Print(&enemy.name), ResetColor).ok(); }
-                1 => {
-                    print_hp_bar(out, enemy.hp, enemy.max_hp, 14);
-                    execute!(out, SetForegroundColor(hp_color(enemy.hp, enemy.max_hp)),
-                        Print(format!(" {:>3}/{:<3}", enemy.hp, enemy.max_hp)), ResetColor).ok();
+                0 => {
+                    execute!(
+                        out,
+                        SetForegroundColor(ec),
+                        SetAttribute(Attribute::Bold),
+                        Print(&enemy.name),
+                        ResetColor
+                    )
+                    .ok();
                 }
-                2 => { execute!(out, SetForegroundColor(Color::DarkYellow), Print(&elems), ResetColor).ok(); }
+                1 => {
+                    ui::hp_bar(out, shown.enemies[0], enemy.max_hp, 14);
+                }
+                2 => {
+                    print_element_badges(out, enemy);
+                }
                 _ => {}
             }
         } else if idx == 0 {
-            execute!(out, SetForegroundColor(Color::DarkGrey),
-                Print(format!("{} [mort]", enemy.name)), ResetColor).ok();
+            execute!(
+                out,
+                SetForegroundColor(ui::DIM),
+                Print(format!("✝ {}", enemy.name)),
+                ResetColor
+            )
+            .ok();
         }
     }
 
     start_row + rows + 1
 }
 
-fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat) -> u16 {
+fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat, shown: &Shown) -> u16 {
     let pc = player.class.color();
     let ascii_lines: Vec<&str> = player.class.ascii().lines().collect();
-    let ascii_col = ascii_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0) + 3;
+    let ascii_col = ascii_lines
+        .iter()
+        .map(|l| l.chars().count())
+        .max()
+        .unwrap_or(0)
+        + 3;
     let max_hp = player.stats.max_hp();
 
     let row_count = ascii_lines.len().max(4);
@@ -671,51 +1066,30 @@ fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat) -> 
             SetAttribute(Attribute::Bold),
             Print(format!("{:<ascii_col$}", line)),
             ResetColor,
-        ).ok();
+        )
+        .ok();
 
         match i {
-            0 => execute!(
-                out,
-                SetForegroundColor(pc),
-                SetAttribute(Attribute::Bold),
-                Print(&player.name),
-                ResetColor,
-            ).ok(),
-            1 => {
-                print_hp_bar(out, player.hp, max_hp, 16);
+            0 => {
                 execute!(
                     out,
-                    SetForegroundColor(hp_color(player.hp, max_hp)),
-                    Print(format!(" {:>3}/{:<3}", player.hp, max_hp)),
+                    SetForegroundColor(pc),
+                    SetAttribute(Attribute::Bold),
+                    Print(&player.name),
                     ResetColor,
-                ).ok()
+                )
+                .ok();
             }
-            2 => execute!(
-                out,
-                SetForegroundColor(Color::Yellow),
-                Print(format!("Estus {}/{}  ", player.estus_charges, player.max_estus())),
-                ResetColor,
-                Print(format!("Ames : {}", player.souls)),
-            ).ok(),
+            1 => {
+                ui::hp_bar(out, shown.player, max_hp, 16);
+            }
+            2 => {
+                print_estus_souls(out, player);
+            }
             3 => {
-                if combat.player_elemental_cooldown > 0 {
-                    execute!(
-                        out,
-                        SetForegroundColor(Color::DarkGrey),
-                        Print(format!("Special : {} tour(s)", combat.player_elemental_cooldown)),
-                        ResetColor,
-                    ).ok()
-                } else {
-                    execute!(
-                        out,
-                        SetForegroundColor(Color::Green),
-                        SetAttribute(Attribute::Bold),
-                        Print("Special : PRET !"),
-                        ResetColor,
-                    ).ok()
-                }
+                print_special_status(out, combat.player_elemental_cooldown);
             }
-            _ => execute!(out, Print("")).ok(),
+            _ => {}
         };
 
         execute!(out, Print("\r\n")).ok();
@@ -724,31 +1098,7 @@ fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat) -> 
 }
 
 fn separator(out: &mut io::Stdout, w: usize) {
-    execute!(
-        out,
-        Print("\r\n"),
-        SetForegroundColor(Color::DarkGrey),
-        Print(format!("  {}\r\n\r\n", "─".repeat(w.saturating_sub(4)))),
-        ResetColor,
-    ).ok();
-}
-
-fn print_action(out: &mut io::Stdout, key: &str, label: &str, enabled: bool) {
-    if enabled {
-        execute!(
-            out,
-            SetForegroundColor(Color::DarkYellow),
-            SetAttribute(Attribute::Bold),
-            Print(format!("[{}]", key)),
-            ResetColor,
-            Print(format!(" {}   ", label)),
-        ).ok();
-    } else {
-        execute!(
-            out,
-            SetForegroundColor(Color::DarkGrey),
-            Print(format!("[{}] {}   ", key, label)),
-            ResetColor,
-        ).ok();
-    }
+    execute!(out, Print("\r\n")).ok();
+    ui::hairline(out, w);
+    execute!(out, Print("\r\n")).ok();
 }
