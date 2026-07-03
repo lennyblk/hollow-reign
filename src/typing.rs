@@ -436,13 +436,384 @@ fn draw_parry_bar(
     out.flush().ok();
 }
 
+// ─── COMBO CHALLENGE (séquence QTE) ──────────────────────────────────────────
+
+#[derive(Clone, Copy)]
+enum ComboKey {
+    Up,
+    Down,
+    Left,
+    Right,
+    Char(char),
+}
+
+impl ComboKey {
+    fn random() -> Self {
+        match rand::random::<u8>() % 8 {
+            0 => ComboKey::Up,
+            1 => ComboKey::Down,
+            2 => ComboKey::Left,
+            3 => ComboKey::Right,
+            _ => ComboKey::Char((b'a' + rand::random::<u8>() % 26) as char),
+        }
+    }
+
+    fn symbol(&self) -> String {
+        match self {
+            ComboKey::Up => "↑".to_string(),
+            ComboKey::Down => "↓".to_string(),
+            ComboKey::Left => "←".to_string(),
+            ComboKey::Right => "→".to_string(),
+            ComboKey::Char(c) => c.to_ascii_uppercase().to_string(),
+        }
+    }
+
+    fn matches(&self, code: &KeyCode) -> bool {
+        match (self, code) {
+            (ComboKey::Up, KeyCode::Up)
+            | (ComboKey::Down, KeyCode::Down)
+            | (ComboKey::Left, KeyCode::Left)
+            | (ComboKey::Right, KeyCode::Right) => true,
+            (ComboKey::Char(c), KeyCode::Char(k)) => k.to_ascii_lowercase() == *c,
+            _ => false,
+        }
+    }
+}
+
+/// Perfect  = séquence complétée sous 55% du temps
+/// Good     = complétée mais plus lentement
+/// Miss     = mauvaise touche (combo brisé) ou temps écoulé
+pub fn combo_challenge() -> ParryResult {
+    let mut out = io::stdout();
+    terminal::enable_raw_mode().expect("crossterm: raw mode requis");
+    execute!(out, Hide).ok();
+
+    print!("\n\n\n\n\n\n\n\n");
+    out.flush().ok();
+    execute!(out, MoveUp(8), SavePosition).ok();
+
+    const SEQ_LEN: usize = 5;
+    const PERFECT_PCT: u64 = 55;
+    let limit_ms = 5_000u64;
+
+    let seq: Vec<ComboKey> = (0..SEQ_LEN).map(|_| ComboKey::random()).collect();
+    let mut done = 0usize;
+    let start = Instant::now();
+
+    let result = loop {
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        if elapsed_ms >= limit_ms {
+            break ParryResult::Miss;
+        }
+
+        draw_combo(&mut out, &seq, done, limit_ms, elapsed_ms);
+
+        if event::poll(Duration::from_millis(30)).unwrap_or(false) {
+            if let Ok(Event::Key(key)) = event::read() {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                match key.code {
+                    KeyCode::Esc => break ParryResult::Miss,
+                    KeyCode::Char(_)
+                    | KeyCode::Up
+                    | KeyCode::Down
+                    | KeyCode::Left
+                    | KeyCode::Right => {
+                        if seq[done].matches(&key.code) {
+                            done += 1;
+                            if done == SEQ_LEN {
+                                let elapsed_ms = start.elapsed().as_millis() as u64;
+                                draw_combo(&mut out, &seq, done, limit_ms, elapsed_ms);
+                                let pct = elapsed_ms * 100 / limit_ms;
+                                break if pct <= PERFECT_PCT {
+                                    ParryResult::Perfect
+                                } else {
+                                    ParryResult::Good
+                                };
+                            }
+                        } else {
+                            // une seule faute brise le combo
+                            break ParryResult::Miss;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    };
+
+    show_result(&mut out, &result);
+
+    execute!(out, Show).ok();
+    terminal::disable_raw_mode().ok();
+    result
+}
+
+fn draw_combo(out: &mut io::Stdout, seq: &[ComboKey], done: usize, limit_ms: u64, elapsed_ms: u64) {
+    execute!(out, RestorePosition).ok();
+
+    // Ligne 1 — vide
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+
+    // Ligne 2 — label
+    execute!(
+        out,
+        Clear(ClearType::CurrentLine),
+        SetForegroundColor(Color::DarkYellow),
+        SetAttribute(Attribute::Bold),
+        Print("  COMBO !  Reproduisez la séquence (flèches + lettres) :\r\n"),
+        ResetColor,
+    )
+    .ok();
+
+    // Ligne 3 — vide
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+
+    // Ligne 4 — séquence
+    execute!(out, Clear(ClearType::CurrentLine), Print("    ")).ok();
+    for (i, key) in seq.iter().enumerate() {
+        let color = if i < done {
+            Color::Green
+        } else if i == done {
+            Color::White
+        } else {
+            Color::DarkGrey
+        };
+        execute!(
+            out,
+            SetForegroundColor(color),
+            SetAttribute(Attribute::Bold)
+        )
+        .ok();
+        if i == done {
+            execute!(out, SetAttribute(Attribute::Underlined)).ok();
+        }
+        execute!(out, Print(key.symbol()), ResetColor, Print("   ")).ok();
+    }
+    execute!(out, Print("\r\n")).ok();
+
+    // Ligne 5 — vide
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+
+    // Ligne 6 — barre de temps (même style que typing)
+    let bw = bar_width();
+    let bw_u64 = bw as u64;
+    let filled = ((elapsed_ms * bw_u64) / limit_ms).min(bw_u64) as usize;
+    let empty = bw - filled;
+    let remaining_s = limit_ms.saturating_sub(elapsed_ms) as f32 / 1000.0;
+    let bar_color = if filled * 100 / bw < 40 {
+        Color::Green
+    } else if filled * 100 / bw < 80 {
+        Color::Yellow
+    } else {
+        Color::Red
+    };
+    let bar = format!("{}{}", "█".repeat(filled), "░".repeat(empty));
+    execute!(
+        out,
+        Clear(ClearType::CurrentLine),
+        Print("  ["),
+        SetForegroundColor(bar_color),
+        Print(&bar),
+        ResetColor,
+        Print(format!("] {:.1}s\r\n", remaining_s)),
+    )
+    .ok();
+
+    // Lignes 7-8 — padding
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+
+    out.flush().ok();
+}
+
+// ─── DODGE CHALLENGE (esquive directionnelle) ────────────────────────────────
+
+/// Perfect  = bonne flèche en moins de 300 ms après la révélation
+/// Good     = bonne flèche dans la fenêtre de 900 ms
+/// Miss     = mauvaise flèche, flèche pressée pendant la feinte, ou trop tard
+pub fn dodge_challenge() -> ParryResult {
+    let mut out = io::stdout();
+    terminal::enable_raw_mode().expect("crossterm: raw mode requis");
+    execute!(out, Hide).ok();
+
+    print!("\n\n\n\n\n\n\n\n");
+    out.flush().ok();
+    execute!(out, MoveUp(8), SavePosition).ok();
+
+    let (dir_code, dir_label) = match rand::random::<u8>() % 4 {
+        0 => (KeyCode::Left, "← GAUCHE"),
+        1 => (KeyCode::Right, "→ DROITE"),
+        2 => (KeyCode::Up, "↑ HAUT"),
+        _ => (KeyCode::Down, "↓ BAS"),
+    };
+
+    // Durée d'armement aléatoire : impossible d'anticiper
+    let windup_ms = 700 + rand::random::<u64>() % 900;
+    const WINDOW_MS: u64 = 900;
+    const PERFECT_MS: u64 = 300;
+
+    let start = Instant::now();
+    let mut result: Option<ParryResult> = None;
+
+    // Phase 1 — l'ennemi arme son coup : presser une flèche = tomber dans la feinte
+    while (start.elapsed().as_millis() as u64) < windup_ms {
+        draw_dodge_windup(&mut out);
+        if event::poll(Duration::from_millis(30)).unwrap_or(false) {
+            if let Ok(Event::Key(key)) = event::read() {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                match key.code {
+                    KeyCode::Esc | KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
+                        result = Some(ParryResult::Miss);
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if result.is_some() {
+            break;
+        }
+    }
+
+    // Phase 2 — direction révélée : fenêtre de réaction courte
+    if result.is_none() {
+        let reveal = Instant::now();
+        loop {
+            let elapsed_ms = reveal.elapsed().as_millis() as u64;
+            if elapsed_ms >= WINDOW_MS {
+                result = Some(ParryResult::Miss);
+                break;
+            }
+
+            draw_dodge_reveal(&mut out, dir_label, elapsed_ms, WINDOW_MS);
+
+            if event::poll(Duration::from_millis(16)).unwrap_or(false) {
+                if let Ok(Event::Key(key)) = event::read() {
+                    if key.kind != KeyEventKind::Press {
+                        continue;
+                    }
+                    match key.code {
+                        code if code == dir_code => {
+                            let t = reveal.elapsed().as_millis() as u64;
+                            result = Some(if t <= PERFECT_MS {
+                                ParryResult::Perfect
+                            } else {
+                                ParryResult::Good
+                            });
+                            break;
+                        }
+                        KeyCode::Esc
+                        | KeyCode::Up
+                        | KeyCode::Down
+                        | KeyCode::Left
+                        | KeyCode::Right => {
+                            result = Some(ParryResult::Miss);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    let result = result.unwrap_or(ParryResult::Miss);
+
+    show_result(&mut out, &result);
+
+    execute!(out, Show).ok();
+    terminal::disable_raw_mode().ok();
+    result
+}
+
+fn draw_dodge_windup(out: &mut io::Stdout) {
+    execute!(out, RestorePosition).ok();
+
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+
+    execute!(
+        out,
+        Clear(ClearType::CurrentLine),
+        SetForegroundColor(Color::DarkYellow),
+        SetAttribute(Attribute::Bold),
+        Print("  ESQUIVE !  L'ennemi arme son coup...\r\n"),
+        ResetColor,
+    )
+    .ok();
+
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+
+    execute!(
+        out,
+        Clear(ClearType::CurrentLine),
+        SetForegroundColor(Color::DarkGrey),
+        Print("      attendez la direction — trop tôt = feinte !\r\n"),
+        ResetColor,
+    )
+    .ok();
+
+    for _ in 0..4 {
+        execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+    }
+
+    out.flush().ok();
+}
+
+fn draw_dodge_reveal(out: &mut io::Stdout, dir_label: &str, elapsed_ms: u64, window_ms: u64) {
+    execute!(out, RestorePosition).ok();
+
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+
+    execute!(
+        out,
+        Clear(ClearType::CurrentLine),
+        SetForegroundColor(Color::Red),
+        SetAttribute(Attribute::Bold),
+        Print(format!("  ESQUIVEZ !   {}\r\n", dir_label)),
+        ResetColor,
+    )
+    .ok();
+
+    execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+
+    // Barre de fenêtre qui se vide
+    let bw = bar_width();
+    let bw_u64 = bw as u64;
+    let remaining = window_ms.saturating_sub(elapsed_ms);
+    let filled = ((remaining * bw_u64) / window_ms).min(bw_u64) as usize;
+    let empty = bw - filled;
+    let bar = format!("{}{}", "█".repeat(filled), "░".repeat(empty));
+    execute!(
+        out,
+        Clear(ClearType::CurrentLine),
+        Print("  ["),
+        SetForegroundColor(Color::Red),
+        Print(&bar),
+        ResetColor,
+        Print("]\r\n"),
+    )
+    .ok();
+
+    for _ in 0..4 {
+        execute!(out, Clear(ClearType::CurrentLine), Print("\r\n")).ok();
+    }
+
+    out.flush().ok();
+}
+
 // ─── CHALLENGE ALÉATOIRE ─────────────────────────────────────────────────────
 
-/// Choisit aléatoirement entre typing_challenge (40%) et parry_challenge (60%).
+/// Choisit aléatoirement le mini-jeu :
+/// parry 30% / combo 25% / esquive 25% / typing 20%.
 pub fn combat_challenge(phrase: &str, limit_ms: u64, perfect_pct: u64) -> ParryResult {
-    if rand::random::<u8>() < 80 {
-        parry_challenge()
-    } else {
-        typing_challenge(phrase, limit_ms, perfect_pct)
+    match rand::random::<u8>() % 100 {
+        0..=29 => parry_challenge(),
+        30..=54 => combo_challenge(),
+        55..=79 => dodge_challenge(),
+        _ => typing_challenge(phrase, limit_ms, perfect_pct),
     }
 }
