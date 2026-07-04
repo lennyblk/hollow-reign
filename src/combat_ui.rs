@@ -194,16 +194,17 @@ fn play_fx(
 // ─── POINT D'ENTRÉE ──────────────────────────────────────────────────────────
 
 pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> CombatResult {
-    // Toujours 1 seul ennemi en combat, quelle que soit la zone.
-    let max_enemies = 1;
+    // Toujours 1 seul ennemi : on affronte le plus important de la salle
+    // (boss > miniboss > chef > mob) pour ne jamais rater le boss ni son butin.
+    let prio = |t: EnemyType| match t {
+        EnemyType::Boss => 3u8,
+        EnemyType::MiniBoss => 2,
+        EnemyType::MobLeader => 1,
+        EnemyType::Mob => 0,
+    };
     let mut enemies = Vec::new();
-    'build: for s in spawns {
-        for _ in 0..s.count {
-            if enemies.len() >= max_enemies {
-                break 'build;
-            }
-            enemies.push(spawn(zone, s.enemy_type, s.element));
-        }
+    if let Some(s) = spawns.iter().max_by_key(|s| prio(s.enemy_type)) {
+        enemies.push(spawn(zone, s.enemy_type, s.element));
     }
     if enemies.is_empty() {
         return CombatResult::Fled;

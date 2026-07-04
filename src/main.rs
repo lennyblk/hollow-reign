@@ -113,6 +113,8 @@ fn main() {
                         player.souls += souls;
                         let item_count = items.len();
                         for item in items {
+                            // Chaque objet lâché s'affiche en grand avant d'aller au sac.
+                            show_item_reveal(&item, "BUTIN");
                             player.pick_up(item);
                         }
                         state.defeated_locations.insert(state.location_id);
@@ -155,7 +157,7 @@ fn main() {
             NavigationEvent::OpenChest(id) => {
                 let items = open_chest(id);
                 for item in items {
-                    show_chest_item(&item);
+                    show_item_reveal(&item, "COFFRE OUVERT");
                     player.pick_up(item);
                 }
             }
@@ -184,7 +186,7 @@ fn main() {
     }
 }
 
-fn show_chest_item(item: &item::Item) {
+fn show_item_reveal(item: &item::Item, title: &str) {
     use crossterm::{
         cursor::{Hide, Show},
         event::{self, Event, KeyEvent, KeyEventKind},
@@ -200,18 +202,8 @@ fn show_chest_item(item: &item::Item) {
 
     let (tw, th) = terminal::size().unwrap_or((120, 30));
 
-    // En-tête
-    let header = "  Coffre ouvert  ";
-    let bar = "═".repeat((tw as usize).saturating_sub(header.len() + 4));
-    execute!(
-        out,
-        SetForegroundColor(Color::DarkYellow),
-        SetAttribute(Attribute::Bold),
-        crossterm::cursor::MoveTo(0, 0),
-        Print(format!("══{}{}══\r\n", header, bar)),
-        ResetColor,
-    )
-    .ok();
+    // En-tête harmonisé
+    ui::top_header(&mut out, title, "", ui::ACCENT, tw as usize);
 
     let ascii = item.ascii();
     let ascii_lines: Vec<&str> = ascii.lines().collect();
@@ -248,7 +240,7 @@ fn show_chest_item(item: &item::Item) {
         execute!(
             out,
             crossterm::cursor::MoveTo(col, row0 + i as u16),
-            SetForegroundColor(Color::DarkYellow),
+            SetForegroundColor(ui::ACCENT),
             Print(line),
             ResetColor,
         )
@@ -274,7 +266,7 @@ fn show_chest_item(item: &item::Item) {
     execute!(
         out,
         crossterm::cursor::MoveTo(hcol, row0 + art_h + 3),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print(hint),
         ResetColor,
     )
