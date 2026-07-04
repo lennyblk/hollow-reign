@@ -71,6 +71,6 @@ impl Stats {
     }
 
     pub fn max_hp(&self) -> u32 {
-        300 + self.vigor * 10
+        100 + self.vigor * 10
     }
 }

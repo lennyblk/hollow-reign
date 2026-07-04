@@ -845,10 +845,23 @@ fn le_roi_creux() -> Enemy {
 
 // ─── DISPATCH ────────────────────────────────────────────────────────────────
 
+/// Multiplicateur de dégâts (en %) appliqué à TOUS les ennemis d'une zone.
+/// Monte avec la progression : les zones tardives frappent bien plus fort.
+fn zone_attack_mult_pct(zone: ZoneId) -> u32 {
+    match zone {
+        ZoneId::Ashfeld => 100,
+        ZoneId::Gravemoor => 135,
+        ZoneId::Rotwood => 170,
+        ZoneId::TheCinders => 210,
+        ZoneId::Frostveil => 255,
+        ZoneId::TheVoid => 320,
+    }
+}
+
 /// Instancie un ennemi concret depuis les données de spawn d'une zone.
 /// Panic si la combinaison (zone, type, element) n'est pas cataloguee.
 pub fn spawn(zone: ZoneId, enemy_type: EnemyType, element: Element) -> Enemy {
-    match (zone, enemy_type, element) {
+    let mut enemy = match (zone, enemy_type, element) {
         // Ashfeld
         (ZoneId::Ashfeld, EnemyType::Mob, Element::Bleed) => creux_errant(),
         (ZoneId::Ashfeld, EnemyType::MobLeader, Element::Bleed) => chef_des_creux(),
@@ -885,7 +898,11 @@ pub fn spawn(zone: ZoneId, enemy_type: EnemyType, element: Element) -> Enemy {
             "spawn non cataloguee: {:?} / {:?} / {:?}",
             zone, enemy_type, element
         ),
-    }
+    };
+
+    // Dégâts mis à l'échelle de la zone (proportionnel à la progression).
+    enemy.attack = enemy.attack * zone_attack_mult_pct(zone) / 100;
+    enemy
 }
 
 // ─── DROPS ───────────────────────────────────────────────────────────────────

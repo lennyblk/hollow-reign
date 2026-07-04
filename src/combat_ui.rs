@@ -70,7 +70,7 @@ fn draw_animated(
         for (i, e) in combat.enemies.iter().enumerate() {
             moving |= step_toward(&mut shown.enemies[i], e.hp);
         }
-        draw_combat(out, player, combat, log, turn, zone, shown);
+        draw_combat(out, player, combat, log, turn, zone, shown, None);
         if !moving {
             break;
         }
@@ -78,14 +78,124 @@ fn draw_animated(
     }
 }
 
+// ─── EFFETS D'IMPACT (juice) ──────────────────────────────────────────────────
+
+const FX_FRAMES: u8 = 6;
+const FX_HITSTOP_MS: u64 = 90;
+const FX_FRAME_MS: u64 = 45;
+
+#[derive(Clone, Copy)]
+enum FxTarget {
+    Player,
+    Enemy(usize),
+}
+
+/// Animation d'impact transitoire : flash + tremblement + nombre de dégâts.
+struct Fx {
+    target: FxTarget,
+    frame: u8,
+    dmg: u32,
+    crit: bool,
+}
+
+impl Fx {
+    fn hits_enemy(&self, i: usize) -> bool {
+        matches!(self.target, FxTarget::Enemy(x) if x == i)
+    }
+    fn hits_player(&self) -> bool {
+        matches!(self.target, FxTarget::Player)
+    }
+    /// Couleur clignotante de l'ASCII pendant l'impact (None = couleur normale).
+    fn flash(&self) -> Option<Color> {
+        match self.frame {
+            0 | 1 => Some(Color::White),
+            2 | 3 => Some(Color::Rgb {
+                r: 255,
+                g: 140,
+                b: 140,
+            }),
+            _ => None,
+        }
+    }
+    /// Décalage horizontal (tremblement) appliqué au personnage frappé.
+    fn shake(&self) -> i16 {
+        match self.frame {
+            0 => 1,
+            1 => -1,
+            2 => 1,
+            3 => -1,
+            _ => 0,
+        }
+    }
+}
+
+/// Nombre de dégâts qui « splash » à la place de la barre de vie pendant l'impact.
+fn draw_splat(out: &mut io::Stdout, frame: u8, dmg: u32, crit: bool) {
+    let color = match (crit, frame) {
+        (_, 0) | (_, 1) => Color::White,
+        (true, _) => Color::Rgb {
+            r: 120,
+            g: 230,
+            b: 240,
+        },
+        (false, _) => Color::Rgb {
+            r: 255,
+            g: 90,
+            b: 90,
+        },
+    };
+    let text = if crit {
+        format!("✦ -{} ✦", dmg)
+    } else {
+        format!("-{}", dmg)
+    };
+    execute!(
+        out,
+        SetForegroundColor(color),
+        SetAttribute(Attribute::Bold),
+        Print(text),
+        ResetColor,
+    )
+    .ok();
+}
+
+/// Joue l'animation d'impact sur une cible, puis laisse la barre de vie se vider.
+/// `shown` conserve encore l'ancienne valeur de PV → le nombre de dégâts s'affiche
+/// pendant que le personnage clignote, avant que la barre ne descende réellement.
+#[allow(clippy::too_many_arguments)]
+fn play_fx(
+    out: &mut io::Stdout,
+    player: &Player,
+    combat: &Combat,
+    log: &[(LogKind, String)],
+    turn: u32,
+    zone: ZoneId,
+    shown: &mut Shown,
+    target: FxTarget,
+    dmg: u32,
+    crit: bool,
+) {
+    if dmg > 0 {
+        for frame in 0..FX_FRAMES {
+            let fx = Fx {
+                target,
+                frame,
+                dmg,
+                crit,
+            };
+            draw_combat(out, player, combat, log, turn, zone, shown, Some(&fx));
+            let ms = if frame == 0 { FX_HITSTOP_MS } else { FX_FRAME_MS };
+            std::thread::sleep(Duration::from_millis(ms));
+        }
+    }
+    draw_animated(out, player, combat, log, turn, zone, shown);
+}
+
 // ─── POINT D'ENTRÉE ──────────────────────────────────────────────────────────
 
 pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> CombatResult {
-    // Zones 1-2 : groupes jusqu'à 3. Zones suivantes : 1 seul ennemi.
-    let max_enemies = match zone {
-        ZoneId::Ashfeld | ZoneId::Gravemoor => 3,
-        _ => 1,
-    };
+    // Toujours 1 seul ennemi en combat, quelle que soit la zone.
+    let max_enemies = 1;
     let mut enemies = Vec::new();
     'build: for s in spawns {
         for _ in 0..s.count {
@@ -190,7 +300,7 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                                     LogKind::PlayerHit,
                                     format!("Tu attaques {} : {} degats.", name, dmg),
                                 );
-                                draw_animated(
+                                play_fx(
                                     &mut out,
                                     player,
                                     &combat,
@@ -198,6 +308,9 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                                     combat.turn,
                                     zone,
                                     &mut shown,
+                                    FxTarget::Enemy(target),
+                                    dmg,
+                                    false,
                                 );
                             }
                             break 'input;
@@ -239,7 +352,8 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                                         format!("Attaque speciale sur {} : {} degats.", name, dmg),
                                     );
                                 }
-                                draw_animated(
+                                // Le spécial « crit » (cyan + étincelles) et cumule burst.
+                                play_fx(
                                     &mut out,
                                     player,
                                     &combat,
@@ -247,6 +361,9 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                                     combat.turn,
                                     zone,
                                     &mut shown,
+                                    FxTarget::Enemy(target),
+                                    dmg + burst,
+                                    true,
                                 );
                             }
                             break 'input;
@@ -330,6 +447,18 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                     LogKind::EnemyHit,
                     format!("{} attaque elementaire : -{} PV.", name, dmg),
                 );
+                play_fx(
+                    &mut out,
+                    player,
+                    &combat,
+                    &log,
+                    combat.turn,
+                    zone,
+                    &mut shown,
+                    FxTarget::Player,
+                    dmg,
+                    false,
+                );
             } else {
                 let dmg = combat.enemy_attack(player, i);
                 if dmg > 0 {
@@ -345,17 +474,20 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                         format!("{} attaque mais rate.", name),
                     );
                 }
+                // Coup encaissé → flash rouge + tremblement sur le joueur.
+                play_fx(
+                    &mut out,
+                    player,
+                    &combat,
+                    &log,
+                    combat.turn,
+                    zone,
+                    &mut shown,
+                    FxTarget::Player,
+                    dmg,
+                    false,
+                );
             }
-            // Chaque coup ennemi se voit à l'écran (barre qui descend)
-            draw_animated(
-                &mut out,
-                player,
-                &combat,
-                &log,
-                combat.turn,
-                zone,
-                &mut shown,
-            );
 
             if player.hp == 0 || !player.status.can_act() {
                 break;
@@ -615,6 +747,7 @@ fn print_special_status(out: &mut io::Stdout, cooldown: u32) {
 
 // ─── RENDU ───────────────────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn draw_combat(
     out: &mut io::Stdout,
     player: &Player,
@@ -623,6 +756,7 @@ fn draw_combat(
     turn: u32,
     zone: ZoneId,
     shown: &Shown,
+    fx: Option<&Fx>,
 ) {
     let (tw, _) = terminal::size().unwrap_or((80, 24));
     let w = tw as usize;
@@ -636,12 +770,12 @@ fn draw_combat(
 
     // ── Affichage combattants (à partir de la ligne 4) ────────────────────────
     let next_row = if combat.enemies.len() == 1 {
-        draw_1v1_side_by_side(out, player, &combat.enemies[0], combat, 4, w, ec, shown)
+        draw_1v1_side_by_side(out, player, &combat.enemies[0], combat, 4, w, ec, shown, fx)
     } else {
-        let nr = draw_enemies_columns(out, combat, 4, w, ec, shown);
+        let nr = draw_enemies_columns(out, combat, 4, w, ec, shown, fx);
         execute!(out, MoveTo(0, nr)).ok();
         separator(out, w); // 3 lignes
-        let player_rows = draw_player_block(out, player, combat, shown);
+        let player_rows = draw_player_block(out, player, combat, shown, fx);
         nr + 3 + player_rows
     };
     execute!(out, MoveTo(0, next_row)).ok();
@@ -790,6 +924,7 @@ fn draw_enemies_columns(
     w: usize,
     ec: Color,
     shown: &Shown,
+    fx: Option<&Fx>,
 ) -> u16 {
     let n = combat.enemies.len();
     if n == 0 {
@@ -815,7 +950,11 @@ fn draw_enemies_columns(
 
     for row in 0..max_h {
         for (ci, e) in combat.enemies.iter().enumerate() {
-            let x = (ci * col_w + 2) as u16;
+            // Effet d'impact ciblant cet ennemi (flash / tremblement / splat).
+            let efx = fx.filter(|f| f.hits_enemy(ci));
+            let dx = efx.map(|f| f.shake()).unwrap_or(0);
+            let art_col = efx.and_then(|f| f.flash()).unwrap_or(ec);
+            let x = (((ci * col_w + 2) as i16) + dx).max(0) as u16;
             let y = start_row + row;
             execute!(out, MoveTo(x, y)).ok();
 
@@ -865,7 +1004,7 @@ fn draw_enemies_columns(
                 let clipped: String = stripped.chars().take(ascii_w).collect();
                 execute!(
                     out,
-                    SetForegroundColor(ec),
+                    SetForegroundColor(art_col),
                     Print(format!("{:<ascii_w$}", clipped)),
                     ResetColor,
                 )
@@ -891,7 +1030,12 @@ fn draw_enemies_columns(
                     .ok();
                 }
                 1 => {
-                    ui::hp_bar(out, shown.enemies[ci], e.max_hp, 14);
+                    // Pendant l'impact : nombre de dégâts à la place de la barre.
+                    if let Some(f) = efx {
+                        draw_splat(out, f.frame, f.dmg, f.crit);
+                    } else {
+                        ui::hp_bar(out, shown.enemies[ci], e.max_hp, 14);
+                    }
                 }
                 2 => {
                     print_element_badges(out, e);
@@ -904,6 +1048,7 @@ fn draw_enemies_columns(
     start_row + max_h + 1
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_1v1_side_by_side(
     out: &mut io::Stdout,
     player: &Player,
@@ -913,9 +1058,13 @@ fn draw_1v1_side_by_side(
     tw: usize,
     ec: Color,
     shown: &Shown,
+    fx: Option<&Fx>,
 ) -> u16 {
     let mid = (tw / 2) as u16;
     let max_hp = player.stats.max_hp();
+
+    let pfx = fx.filter(|f| f.hits_player());
+    let efx = fx.filter(|f| f.hits_enemy(0));
 
     let p_ascii: Vec<&str> = player.class.ascii().lines().collect();
     let e_ascii: Vec<&str> = enemy.ascii.lines().collect();
@@ -956,12 +1105,15 @@ fn draw_1v1_side_by_side(
 
         // ── Joueur (gauche) ──────────────────────────────────────────────────
         let pc = player.class.color();
-        execute!(out, MoveTo(2, start_row + i)).ok();
+        let p_col = pfx.and_then(|f| f.flash()).unwrap_or(pc);
+        let p_dx = pfx.map(|f| f.shake()).unwrap_or(0);
+        let px = (2i16 + p_dx).max(0) as u16;
+        execute!(out, MoveTo(px, start_row + i)).ok();
         let p_line = p_ascii.get(idx).copied().unwrap_or("");
         let p_clipped: String = p_line.chars().take(p_art_w).collect();
         execute!(
             out,
-            SetForegroundColor(pc),
+            SetForegroundColor(p_col),
             SetAttribute(Attribute::Bold),
             Print(format!("{:<p_art_w$}", p_clipped)),
             ResetColor,
@@ -980,7 +1132,11 @@ fn draw_1v1_side_by_side(
                 .ok();
             }
             1 => {
-                ui::hp_bar(out, shown.player, max_hp, 16);
+                if let Some(f) = pfx {
+                    draw_splat(out, f.frame, f.dmg, f.crit);
+                } else {
+                    ui::hp_bar(out, shown.player, max_hp, 16);
+                }
             }
             2 => {
                 print_estus_souls(out, player);
@@ -992,7 +1148,10 @@ fn draw_1v1_side_by_side(
         }
 
         // ── Ennemi (droite) ──────────────────────────────────────────────────
-        execute!(out, MoveTo(mid + 2, start_row + i)).ok();
+        let e_col = efx.and_then(|f| f.flash()).unwrap_or(ec);
+        let e_dx = efx.map(|f| f.shake()).unwrap_or(0);
+        let ex = ((mid as i16) + 2 + e_dx).max(0) as u16;
+        execute!(out, MoveTo(ex, start_row + i)).ok();
         if enemy_visually_alive {
             let e_line = e_ascii.get(idx).copied().unwrap_or("");
             let stripped = if e_line.len() >= e_indent {
@@ -1003,7 +1162,7 @@ fn draw_1v1_side_by_side(
             let e_clipped: String = stripped.chars().take(e_art_w).collect();
             execute!(
                 out,
-                SetForegroundColor(ec),
+                SetForegroundColor(e_col),
                 Print(format!("{:<e_art_w$}", e_clipped)),
                 ResetColor,
                 Print("  ")
@@ -1021,7 +1180,11 @@ fn draw_1v1_side_by_side(
                     .ok();
                 }
                 1 => {
-                    ui::hp_bar(out, shown.enemies[0], enemy.max_hp, 14);
+                    if let Some(f) = efx {
+                        draw_splat(out, f.frame, f.dmg, f.crit);
+                    } else {
+                        ui::hp_bar(out, shown.enemies[0], enemy.max_hp, 14);
+                    }
                 }
                 2 => {
                     print_element_badges(out, enemy);
@@ -1042,7 +1205,13 @@ fn draw_1v1_side_by_side(
     start_row + rows + 1
 }
 
-fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat, shown: &Shown) -> u16 {
+fn draw_player_block(
+    out: &mut io::Stdout,
+    player: &Player,
+    combat: &Combat,
+    shown: &Shown,
+    fx: Option<&Fx>,
+) -> u16 {
     let pc = player.class.color();
     let ascii_lines: Vec<&str> = player.class.ascii().lines().collect();
     let ascii_col = ascii_lines
@@ -1053,16 +1222,21 @@ fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat, sho
         + 3;
     let max_hp = player.stats.max_hp();
 
+    let pfx = fx.filter(|f| f.hits_player());
+    let p_col = pfx.and_then(|f| f.flash()).unwrap_or(pc);
+    // Tremblement via l'indentation de gauche (pas de MoveTo ici).
+    let lead = (2i16 + pfx.map(|f| f.shake()).unwrap_or(0)).max(0) as usize;
+
     let row_count = ascii_lines.len().max(4);
     let rows_u16 = row_count as u16;
 
     for i in 0..row_count {
-        execute!(out, Print("  ")).ok();
+        execute!(out, Print(" ".repeat(lead))).ok();
 
         let line = ascii_lines.get(i).copied().unwrap_or("");
         execute!(
             out,
-            SetForegroundColor(pc),
+            SetForegroundColor(p_col),
             SetAttribute(Attribute::Bold),
             Print(format!("{:<ascii_col$}", line)),
             ResetColor,
@@ -1081,7 +1255,11 @@ fn draw_player_block(out: &mut io::Stdout, player: &Player, combat: &Combat, sho
                 .ok();
             }
             1 => {
-                ui::hp_bar(out, shown.player, max_hp, 16);
+                if let Some(f) = pfx {
+                    draw_splat(out, f.frame, f.dmg, f.crit);
+                } else {
+                    ui::hp_bar(out, shown.player, max_hp, 16);
+                }
             }
             2 => {
                 print_estus_souls(out, player);
