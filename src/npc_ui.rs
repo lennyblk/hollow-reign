@@ -4,12 +4,13 @@ use crossterm::{
     cursor::{Hide, MoveTo, Show},
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     execute,
-    style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
+    style::{Color, Print, ResetColor, SetForegroundColor},
     terminal::{self, Clear, ClearType},
 };
 
 use crate::catalog::item_by_name;
 use crate::player::Player;
+use crate::ui;
 
 // ─── DONNÉES NPC ─────────────────────────────────────────────────────────────
 
@@ -461,24 +462,15 @@ fn show_page(out: &mut io::Stdout, data: &NpcData, text: &str, hint: &str, is_re
     execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
 
     // En-tête
-    let title = format!("  {}  ", data.name);
-    let bar = "═".repeat((tw as usize).saturating_sub(title.len() + 4));
-    execute!(
-        out,
-        SetForegroundColor(Color::DarkYellow),
-        SetAttribute(Attribute::Bold),
-        Print(format!("══{}{}══\r\n", title, bar)),
-        ResetColor,
-    )
-    .ok();
+    ui::top_header(out, data.name, "", ui::ACCENT, tw as usize);
 
     // Séparateur vertical (1/3 - 10 pour ASCII, reste pour texte)
     let split = ((tw as usize) / 3).saturating_sub(10);
-    for r in 1..th.saturating_sub(2) {
+    for r in 2..th.saturating_sub(2) {
         execute!(
             out,
             MoveTo(split as u16, r),
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print("│"),
             ResetColor,
         )
@@ -534,24 +526,7 @@ fn show_page(out: &mut io::Stdout, data: &NpcData, text: &str, hint: &str, is_re
     }
 
     // ── Pied de page ─────────────────────────────────────────────────────────
-    let footer = th.saturating_sub(2);
-    execute!(
-        out,
-        MoveTo(0, footer),
-        SetForegroundColor(Color::DarkGrey),
-        Print(format!("  {}", "─".repeat((tw as usize).saturating_sub(4)))),
-        ResetColor,
-    )
-    .ok();
-    let hx = (tw.saturating_sub(hint.len() as u16)) / 2;
-    execute!(
-        out,
-        MoveTo(hx, footer + 1),
-        SetForegroundColor(Color::DarkGrey),
-        Print(hint),
-        ResetColor,
-    )
-    .ok();
+    ui::hint_bar(out, tw as usize, th as usize, hint);
 
     out.flush().ok();
 }

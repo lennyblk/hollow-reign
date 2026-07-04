@@ -11,6 +11,7 @@ use crossterm::{
 use crate::map::World;
 use crate::player::Player;
 use crate::stats::Stats;
+use crate::ui;
 use crate::zone::ZoneId;
 
 // ─── ART ASCII GRÂCE ─────────────────────────────────────────────────────────
@@ -63,7 +64,7 @@ fn stat_preview(player: &Player, key: &str) -> String {
     match key {
         "vigor" => {
             let cur  = s.max_hp();
-            let next = 300 + (s.vigor + 1) * 10;
+            let next = 100 + (s.vigor + 1) * 10;
             format!("PV Max : {} -> {} (+{})", cur, next, next - cur)
         }
         "strength" => {
@@ -234,7 +235,7 @@ fn draw_main(
     execute!(
         out,
         MoveTo(sc, 3),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print("─".repeat(right_width.min(30))),
         ResetColor,
     ).ok();
@@ -250,7 +251,7 @@ fn draw_main(
             execute!(
                 out,
                 MoveTo(sc, row),
-                SetForegroundColor(Color::DarkYellow),
+                SetForegroundColor(ui::ACCENT),
                 SetAttribute(Attribute::Bold),
                 Print(format!("▶ {}", label)),
                 ResetColor,
@@ -267,7 +268,7 @@ fn draw_main(
             execute!(
                 out,
                 MoveTo(sc, row),
-                SetForegroundColor(Color::DarkGrey),
+                SetForegroundColor(ui::DIM),
                 Print(format!("  {} (aucune grace visitee)", label)),
                 ResetColor,
             ).ok();
@@ -309,7 +310,7 @@ fn draw_level_up(
     // Âmes + coût niveau suivant
     let cost = player.soul_cost();
     execute!(out, MoveTo(sc + 16, 2),
-        SetForegroundColor(Color::DarkYellow), SetAttribute(Attribute::Bold),
+        SetForegroundColor(ui::ACCENT), SetAttribute(Attribute::Bold),
         Print(format!("  ◈ {} ames", player.souls)), ResetColor).ok();
     execute!(out, MoveTo(sc + 16, 3),
         SetForegroundColor(if player.souls >= cost { Color::Green } else { Color::Red }),
@@ -318,7 +319,7 @@ fn draw_level_up(
     execute!(
         out,
         MoveTo(sc, 3),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print("─".repeat(right_width)),
         ResetColor,
     ).ok();
@@ -331,7 +332,7 @@ fn draw_level_up(
             execute!(
                 out,
                 MoveTo(sc, srow),
-                SetForegroundColor(Color::DarkYellow),
+                SetForegroundColor(ui::ACCENT),
                 SetAttribute(Attribute::Bold),
                 Print(format!("▶ {:<14} {:>3}  ->  {}", label, val, val + 1)),
                 ResetColor,
@@ -351,7 +352,7 @@ fn draw_level_up(
     execute!(
         out,
         MoveTo(sc, preview_row),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print("─".repeat(right_width)),
         ResetColor,
     ).ok();
@@ -360,7 +361,7 @@ fn draw_level_up(
     execute!(
         out,
         MoveTo(sc, preview_row + 1),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print(desc),
         ResetColor,
     ).ok();
@@ -414,7 +415,7 @@ fn draw_fast_travel(
     execute!(
         out,
         MoveTo(sc, 3),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print("─".repeat(50)),
         ResetColor,
     ).ok();
@@ -426,7 +427,7 @@ fn draw_fast_travel(
             execute!(
                 out,
                 MoveTo(sc, row),
-                SetForegroundColor(Color::DarkYellow),
+                SetForegroundColor(ui::ACCENT),
                 SetAttribute(Attribute::Bold),
                 Print(format!("▶ {:<30} {}", name, zone_name)),
                 ResetColor,
@@ -449,15 +450,7 @@ fn draw_fast_travel(
 // ─── UTILITAIRES DE RENDU ────────────────────────────────────────────────────
 
 fn draw_header(out: &mut io::Stdout, grace_name: &str, tw: u16) {
-    let title = format!("  Grace — {}  ", grace_name);
-    let bar   = "═".repeat((tw as usize).saturating_sub(title.len() + 4));
-    execute!(
-        out,
-        SetForegroundColor(Color::DarkYellow),
-        SetAttribute(Attribute::Bold),
-        Print(format!("══{}{}══\r\n", title, bar)),
-        ResetColor,
-    ).ok();
+    ui::top_header(out, "GRACE", grace_name, ui::ACCENT, tw as usize);
 }
 
 /// Dessine l'art ASCII + infos joueur en colonne gauche. Retourne le nombre de lignes de l'art.
@@ -469,7 +462,7 @@ fn draw_art_and_info(out: &mut io::Stdout, player: &Player, tw: u16) -> u16 {
         execute!(
             out,
             MoveTo(2, row),
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print(line),
             ResetColor,
         ).ok();
@@ -481,7 +474,7 @@ fn draw_art_and_info(out: &mut io::Stdout, player: &Player, tw: u16) -> u16 {
         SetAttribute(Attribute::Bold), Print(&player.name), ResetColor).ok();
     row += 1;
 
-    execute!(out, MoveTo(2, row), SetForegroundColor(Color::DarkYellow),
+    execute!(out, MoveTo(2, row), SetForegroundColor(ui::ACCENT),
         Print(format!("Niveau  {}", player.level)), ResetColor).ok();
     row += 1;
 
@@ -512,20 +505,5 @@ fn draw_art_and_info(out: &mut io::Stdout, player: &Player, tw: u16) -> u16 {
 
 fn draw_hint(out: &mut io::Stdout, tw: u16, hint: &str) {
     let (_, th) = terminal::size().unwrap_or((tw, 35));
-    let bar_row = th.saturating_sub(2);
-    execute!(
-        out,
-        MoveTo(0, bar_row),
-        SetForegroundColor(Color::DarkGrey),
-        Print(format!("  {}  ", "─".repeat((tw as usize).saturating_sub(4)))),
-        ResetColor,
-    ).ok();
-    let hx = (tw.saturating_sub(hint.len() as u16)) / 2;
-    execute!(
-        out,
-        MoveTo(hx, bar_row + 1),
-        SetForegroundColor(Color::DarkGrey),
-        Print(hint),
-        ResetColor,
-    ).ok();
+    ui::hint_bar(out, tw as usize, th as usize, hint);
 }

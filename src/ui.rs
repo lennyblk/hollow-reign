@@ -1,6 +1,7 @@
 use std::io::{self};
 
 use crossterm::{
+    cursor::MoveTo,
     execute,
     style::{
         Attribute, Color, Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor,
@@ -11,6 +12,12 @@ use crate::item::Element;
 
 // ─── PALETTE ─────────────────────────────────────────────────────────────────
 
+/// Accent doré des menus (titres, sélection). Cohérent avec l'estus / les âmes.
+pub const ACCENT: Color = Color::Rgb {
+    r: 240,
+    g: 180,
+    b: 60,
+};
 /// Texte atténué (hiérarchie visuelle).
 pub const DIM: Color = Color::Rgb {
     r: 115,
@@ -180,6 +187,61 @@ pub fn screen_header(out: &mut io::Stdout, title: &str, detail: &str, accent: Co
         Print(format!("  {}", "━".repeat(seg))),
         SetForegroundColor(HAIRLINE),
         Print(format!("{}\r\n", "─".repeat(w.saturating_sub(seg + 4)))),
+        ResetColor,
+    )
+    .ok();
+}
+
+/// En-tête d'écran positionné (lignes 0-1) : `▍TITRE` accentué + double filet.
+/// À appeler juste après un Clear ; le contenu commence à la ligne 2.
+pub fn top_header(out: &mut io::Stdout, title: &str, detail: &str, accent: Color, w: usize) {
+    execute!(
+        out,
+        MoveTo(0, 0),
+        SetForegroundColor(accent),
+        SetAttribute(Attribute::Bold),
+        Print(format!("  ▍{}", title)),
+        ResetColor,
+    )
+    .ok();
+    if !detail.is_empty() {
+        execute!(
+            out,
+            SetForegroundColor(DIM),
+            Print(format!("   {}", detail)),
+            ResetColor,
+        )
+        .ok();
+    }
+    let seg = 12usize.min(w.saturating_sub(4));
+    execute!(
+        out,
+        MoveTo(0, 1),
+        SetForegroundColor(accent),
+        Print(format!("  {}", "━".repeat(seg))),
+        SetForegroundColor(HAIRLINE),
+        Print("─".repeat(w.saturating_sub(seg + 4))),
+        ResetColor,
+    )
+    .ok();
+}
+
+/// Barre d'aide en bas d'écran : filet + astuce atténuée, positionnée.
+pub fn hint_bar(out: &mut io::Stdout, w: usize, th: usize, hint: &str) {
+    let row = th.saturating_sub(2) as u16;
+    execute!(
+        out,
+        MoveTo(0, row),
+        SetForegroundColor(HAIRLINE),
+        Print(format!("  {}", "─".repeat(w.saturating_sub(4)))),
+        ResetColor,
+    )
+    .ok();
+    execute!(
+        out,
+        MoveTo(2, row + 1),
+        SetForegroundColor(DIM),
+        Print(hint),
         ResetColor,
     )
     .ok();

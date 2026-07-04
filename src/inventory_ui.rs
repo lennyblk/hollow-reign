@@ -13,6 +13,7 @@ use crate::equipment::Equipment;
 use crate::item::{ConsumableEffect, EquipmentSlot, Item, StatScaling};
 use crate::map_ui;
 use crate::player::Player;
+use crate::ui;
 
 // ─── RÉSULTAT ────────────────────────────────────────────────────────────────
 
@@ -314,16 +315,8 @@ fn draw_fullscreen(
     execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
 
     // En-tête
-    let title  = if tab == Tab::Inventory { "Inventaire" } else { "Equipement" };
-    let header = format!("  {}  ", title);
-    let bar    = "═".repeat(w.saturating_sub(header.len() + 4));
-    execute!(
-        out,
-        SetForegroundColor(Color::DarkYellow),
-        SetAttribute(Attribute::Bold),
-        Print(format!("══{}{}══\r\n", header, bar)),
-        ResetColor,
-    ).ok();
+    let title = if tab == Tab::Inventory { "INVENTAIRE" } else { "EQUIPEMENT" };
+    ui::top_header(out, title, "", ui::ACCENT, w);
 
     // ── Colonne gauche : ASCII joueur ─────────────────────────────────────────
     let pc = player.class.color();
@@ -342,8 +335,8 @@ fn draw_fullscreen(
     let max_hp   = player.stats.max_hp();
     let mid_data: Vec<(Option<&str>, String, Color)> = vec![
         (None,              player.name.clone(),                         Color::White),
-        (None,              class_label(&player.class).to_string(),      Color::DarkYellow),
-        (None,              "─".repeat(18),                              Color::DarkGrey),
+        (None,              class_label(&player.class).to_string(),      ui::ACCENT),
+        (None,              "─".repeat(18),                              ui::DIM),
         (Some("PV       "), format!("{}/{}", player.hp, max_hp),         Color::White),
         (Some("Vigueur  "), format!("{}", player.stats.vigor),           Color::Grey),
         (Some("Force    "), format!("{}", player.stats.strength),        Color::Grey),
@@ -352,7 +345,7 @@ fn draw_fullscreen(
         (Some("Foi      "), format!("{}", player.stats.faith),           Color::Grey),
         (Some("Arcane   "), format!("{}", player.stats.arcane),          Color::Grey),
         (Some("Mental   "), format!("{}", player.stats.mind),            Color::Grey),
-        (None,              "─".repeat(18),                              Color::DarkGrey),
+        (None,              "─".repeat(18),                              ui::DIM),
         (Some("Ames     "), format!("{}", player.souls),                 Color::Yellow),
         (Some("ATK      "), format!("{}", player_atk(player)),           Color::Red),
         (Some("DEF      "), format!("{}", player_def(player)),           Color::Blue),
@@ -370,7 +363,7 @@ fn draw_fullscreen(
             ).ok(),
             Some(lbl) => execute!(
                 out,
-                SetForegroundColor(Color::DarkGrey),
+                SetForegroundColor(ui::DIM),
                 Print(format!("{}: ", lbl)),
                 ResetColor,
                 SetForegroundColor(*color),
@@ -390,7 +383,7 @@ fn draw_fullscreen(
     execute!(
         out,
         MoveTo(LIST_X, START_ROW + 1),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print("─".repeat(list_sep_w)),
         ResetColor,
     ).ok();
@@ -409,7 +402,7 @@ fn draw_fullscreen(
         execute!(
             out,
             MoveTo(DETAIL_X - 1, r),
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print("│"),
             ResetColor,
         ).ok();
@@ -428,41 +421,50 @@ fn draw_fullscreen(
             }
         }
     };
-    draw_item_detail(out, hovered, DETAIL_X, START_ROW, h, w);
+    // Objet équipé du même emplacement (pour comparer, uniquement depuis l'inventaire).
+    let equipped: Option<&Item> = if tab == Tab::Inventory {
+        let eq = &player.equipment[0];
+        match hovered {
+            Some(Item::Weapon(_)) => eq.weapon.as_ref(),
+            Some(Item::Armor(_))  => eq.armor.as_ref(),
+            Some(Item::Shield(_)) => eq.shield.as_ref(),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    draw_item_detail(out, hovered, equipped, DETAIL_X, START_ROW, h, w);
 
     // ── Pied de page ─────────────────────────────────────────────────────────
-    let footer = h as u16 - 2;
-    execute!(
-        out,
-        MoveTo(0, footer),
-        SetForegroundColor(Color::DarkGrey),
-        Print(format!("  {}", "─".repeat(w.saturating_sub(4)))),
-        ResetColor,
-    ).ok();
     let help = match tab {
         Tab::Inventory => "[haut/bas] Naviguer   [U/Entree] Utiliser ou Equiper   [P] Equipement   [Esc] Fermer",
         Tab::Equipment => "[haut/bas] Naviguer   [U/R/Entree] Desequiper          [I] Inventaire   [Esc] Fermer",
     };
-    execute!(
-        out,
-        MoveTo(2, footer + 1),
-        SetForegroundColor(Color::DarkGrey),
-        Print(help),
-        ResetColor,
-    ).ok();
+    ui::hint_bar(out, w, h, help);
 
     out.flush().ok();
 }
 
 // ─── PANEL DÉTAIL ITEM ───────────────────────────────────────────────────────
 
+/// Stat comparable clé d'un item : (label, valeur). None pour les consommables.
+fn compare_stat(item: &Item) -> Option<(&'static str, u32)> {
+    match item {
+        Item::Weapon(w) => Some(("Degats", w.base_damage)),
+        Item::Armor(a)  => Some(("Defense", a.defense)),
+        Item::Shield(s) => Some(("Defense", s.defense)),
+        Item::Consumable(_) => None,
+    }
+}
+
 fn draw_item_detail(
-    out:   &mut io::Stdout,
-    item:  Option<&Item>,
-    x:     u16,
-    start: u16,
-    h:     usize,
-    tw:    usize,
+    out:      &mut io::Stdout,
+    item:     Option<&Item>,
+    equipped: Option<&Item>,
+    x:        u16,
+    start:    u16,
+    h:        usize,
+    tw:       usize,
 ) {
     let detail_w = tw.saturating_sub(x as usize + 2);
 
@@ -472,7 +474,7 @@ fn draw_item_detail(
             execute!(
                 out,
                 MoveTo(x + 1, start + 2),
-                SetForegroundColor(Color::DarkGrey),
+                SetForegroundColor(ui::DIM),
                 Print("(rien de selectionne)"),
                 ResetColor,
             ).ok();
@@ -490,7 +492,7 @@ fn draw_item_detail(
         SetAttribute(Attribute::Bold),
         Print(item.name()),
         ResetColor,
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print(format!("  [{}]", item_type_label(item))),
         ResetColor,
     ).ok();
@@ -499,7 +501,7 @@ fn draw_item_detail(
     execute!(
         out,
         MoveTo(x + 1, row),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print("─".repeat(detail_w)),
         ResetColor,
     ).ok();
@@ -513,7 +515,7 @@ fn draw_item_detail(
             execute!(
                 out,
                 MoveTo(x + 1, row),
-                SetForegroundColor(Color::DarkGrey),
+                SetForegroundColor(ui::DIM),
                 Print(line),
                 ResetColor,
             ).ok();
@@ -528,7 +530,7 @@ fn draw_item_detail(
         execute!(
             out,
             MoveTo(x + 1, row),
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print(format!("{}: ", label)),
             ResetColor,
             SetForegroundColor(Color::White),
@@ -538,12 +540,53 @@ fn draw_item_detail(
         row += 1;
     }
 
+    // ── Comparaison avec l'objet équipé (depuis l'inventaire) ─────────────────
+    if let (Some(eq), Some((stat_label, new_val))) = (equipped, compare_stat(item)) {
+        if let Some((_, old_val)) = compare_stat(eq) {
+            if (row as usize) < h.saturating_sub(7) {
+                row += 1;
+                execute!(
+                    out,
+                    MoveTo(x + 1, row),
+                    SetForegroundColor(ui::ACCENT),
+                    SetAttribute(Attribute::Bold),
+                    Print("vs equipe"),
+                    ResetColor,
+                    SetForegroundColor(ui::DIM),
+                    Print(format!("  ({})", eq.name())),
+                    ResetColor,
+                ).ok();
+                row += 1;
+
+                let (delta_txt, delta_col) = if new_val > old_val {
+                    (format!("▲ +{}", new_val - old_val), Color::Rgb { r: 95, g: 210, b: 120 })
+                } else if new_val < old_val {
+                    (format!("▼ -{}", old_val - new_val), Color::Rgb { r: 235, g: 90, b: 90 })
+                } else {
+                    ("= egal".to_string(), ui::DIM)
+                };
+                execute!(
+                    out,
+                    MoveTo(x + 1, row),
+                    SetForegroundColor(ui::DIM),
+                    Print(format!("{}  {} → {}   ", stat_label, old_val, new_val)),
+                    ResetColor,
+                    SetForegroundColor(delta_col),
+                    SetAttribute(Attribute::Bold),
+                    Print(delta_txt),
+                    ResetColor,
+                ).ok();
+                row += 1;
+            }
+        }
+    }
+
     row += 1;
     if (row as usize) < h.saturating_sub(4) {
         execute!(
             out,
             MoveTo(x + 1, row),
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print("─".repeat(detail_w)),
             ResetColor,
         ).ok();
@@ -579,7 +622,7 @@ fn draw_inventory_list(
         execute!(
             out,
             MoveTo(x, start_row),
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print("(inventaire vide)"),
             ResetColor,
         ).ok();
@@ -595,7 +638,7 @@ fn draw_inventory_list(
         if is_sel {
             execute!(
                 out,
-                SetForegroundColor(Color::DarkYellow),
+                SetForegroundColor(ui::ACCENT),
                 SetAttribute(Attribute::Bold),
                 Print(format!("{:>2} > ", inv_idx + 1)),
                 ResetColor,
@@ -603,7 +646,7 @@ fn draw_inventory_list(
         } else {
             execute!(
                 out,
-                SetForegroundColor(Color::DarkGrey),
+                SetForegroundColor(ui::DIM),
                 Print(format!("{:>2}   ", inv_idx + 1)),
                 ResetColor,
             ).ok();
@@ -613,7 +656,7 @@ fn draw_inventory_list(
             SetForegroundColor(item_color(item)),
             Print(item.name()),
             ResetColor,
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print(format!("  [{}]", item_type_label(item))),
             ResetColor,
         ).ok();
@@ -642,7 +685,7 @@ fn draw_equipment_list(
         if is_sel {
             execute!(
                 out,
-                SetForegroundColor(Color::DarkYellow),
+                SetForegroundColor(ui::ACCENT),
                 SetAttribute(Attribute::Bold),
                 Print("> "),
                 ResetColor,
@@ -652,7 +695,7 @@ fn draw_equipment_list(
         }
         execute!(
             out,
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print(format!("{}: ", label)),
             ResetColor,
         ).ok();
@@ -665,7 +708,7 @@ fn draw_equipment_list(
             ).ok(),
             None => execute!(
                 out,
-                SetForegroundColor(Color::DarkGrey),
+                SetForegroundColor(ui::DIM),
                 Print("(aucun)"),
                 ResetColor,
             ).ok(),
@@ -679,7 +722,7 @@ fn print_tab_label(out: &mut io::Stdout, key: &str, label: &str, active: bool) {
     if active {
         execute!(
             out,
-            SetForegroundColor(Color::DarkYellow),
+            SetForegroundColor(ui::ACCENT),
             SetAttribute(Attribute::Bold),
             Print(format!("[{}] {}", key, label)),
             ResetColor,
@@ -687,7 +730,7 @@ fn print_tab_label(out: &mut io::Stdout, key: &str, label: &str, active: bool) {
     } else {
         execute!(
             out,
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print(format!("[{}] {}", key, label)),
             ResetColor,
         ).ok();
@@ -710,7 +753,7 @@ fn draw_inline(out: &mut io::Stdout, player: &Player, tab: Tab, selected: usize,
             if player.inventory.is_empty() {
                 execute!(
                     out,
-                    SetForegroundColor(Color::DarkGrey),
+                    SetForegroundColor(ui::DIM),
                     Print("  (inventaire vide)\r\n"),
                     ResetColor,
                 ).ok();
@@ -721,7 +764,7 @@ fn draw_inline(out: &mut io::Stdout, player: &Player, tab: Tab, selected: usize,
                     if is_sel {
                         execute!(
                             out,
-                            SetForegroundColor(Color::DarkYellow),
+                            SetForegroundColor(ui::ACCENT),
                             SetAttribute(Attribute::Bold),
                             Print(format!("{} > ", i + 1)),
                             ResetColor,
@@ -729,7 +772,7 @@ fn draw_inline(out: &mut io::Stdout, player: &Player, tab: Tab, selected: usize,
                     } else {
                         execute!(
                             out,
-                            SetForegroundColor(Color::DarkGrey),
+                            SetForegroundColor(ui::DIM),
                             Print(format!("{}   ", i + 1)),
                             ResetColor,
                         ).ok();
@@ -739,7 +782,7 @@ fn draw_inline(out: &mut io::Stdout, player: &Player, tab: Tab, selected: usize,
                         SetForegroundColor(item_color(item)),
                         Print(item.name()),
                         ResetColor,
-                        SetForegroundColor(Color::DarkGrey),
+                        SetForegroundColor(ui::DIM),
                         Print(format!("  [{}]\r\n", item_type_label(item))),
                         ResetColor,
                     ).ok();
@@ -759,7 +802,7 @@ fn draw_inline(out: &mut io::Stdout, player: &Player, tab: Tab, selected: usize,
                 if is_sel {
                     execute!(
                         out,
-                        SetForegroundColor(Color::DarkYellow),
+                        SetForegroundColor(ui::ACCENT),
                         SetAttribute(Attribute::Bold),
                         Print("> "),
                         ResetColor,
@@ -769,7 +812,7 @@ fn draw_inline(out: &mut io::Stdout, player: &Player, tab: Tab, selected: usize,
                 }
                 execute!(
                     out,
-                    SetForegroundColor(Color::DarkGrey),
+                    SetForegroundColor(ui::DIM),
                     Print(format!("{}: ", label)),
                     ResetColor,
                 ).ok();
@@ -782,7 +825,7 @@ fn draw_inline(out: &mut io::Stdout, player: &Player, tab: Tab, selected: usize,
                     ).ok(),
                     None => execute!(
                         out,
-                        SetForegroundColor(Color::DarkGrey),
+                        SetForegroundColor(ui::DIM),
                         Print("(aucun)\r\n"),
                         ResetColor,
                     ).ok(),
@@ -794,7 +837,7 @@ fn draw_inline(out: &mut io::Stdout, player: &Player, tab: Tab, selected: usize,
     execute!(
         out,
         Print(format!("{}\r\n  ", sep)),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
     ).ok();
     let help = match tab {
         Tab::Inventory => "[haut/bas] Naviguer   [U/Entree] Utiliser/Equiper   [P] Equipement   [Esc] Fermer",

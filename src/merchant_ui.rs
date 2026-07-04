@@ -10,6 +10,7 @@ use crossterm::{
 
 use crate::catalog::item_by_name;
 use crate::player::Player;
+use crate::ui;
 use crate::zone::ZoneId;
 
 // ─── SÉPARATEUR ───────────────────────────────────────────────────────────────
@@ -223,27 +224,18 @@ fn draw(
     execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
 
     // ── En-tête ───────────────────────────────────────────────────────────────
-    let header = "  MARCHAND  ";
-    let bar_len = (tw as usize).saturating_sub(header.len() + 4);
-    execute!(
-        out,
-        SetForegroundColor(Color::DarkYellow),
-        SetAttribute(Attribute::Bold),
-        Print(format!("══{}{}══\r\n", header, "═".repeat(bar_len))),
-        ResetColor,
-    )
-    .ok();
+    ui::top_header(out, "MARCHAND", "", ui::ACCENT, tw as usize);
 
     // ── Art du marchand (colonne gauche) ──────────────────────────────────────
     for (row, line) in MERCHANT_ART.lines().enumerate() {
-        let y = 1 + row as u16;
+        let y = 2 + row as u16;
         if y >= th.saturating_sub(3) {
             break;
         }
         execute!(
             out,
             MoveTo(0, y),
-            SetForegroundColor(Color::DarkYellow),
+            SetForegroundColor(ui::ACCENT),
             Print(line),
             ResetColor,
         )
@@ -251,11 +243,11 @@ fn draw(
     }
 
     // ── Séparateur vertical ───────────────────────────────────────────────────
-    for row in 1..th.saturating_sub(2) {
+    for row in 2..th.saturating_sub(2) {
         execute!(
             out,
             MoveTo(ART_SEP, row),
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print("│"),
             ResetColor,
         )
@@ -270,7 +262,7 @@ fn draw(
     execute!(
         out,
         MoveTo(rx, 2),
-        SetForegroundColor(Color::DarkYellow),
+        SetForegroundColor(ui::ACCENT),
         SetAttribute(Attribute::Bold),
         Print(format!("Ames : {}", player.souls)),
         ResetColor,
@@ -281,7 +273,7 @@ fn draw(
     execute!(
         out,
         MoveTo(rx, 3),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print("─".repeat(rw.min(35))),
         ResetColor,
     )
@@ -306,7 +298,7 @@ fn draw(
     execute!(
         out,
         MoveTo(rx, greet_row),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print("─".repeat(rw.min(35))),
         ResetColor,
     )
@@ -333,7 +325,7 @@ fn draw(
             execute!(
                 out,
                 MoveTo(rx, item_row),
-                SetForegroundColor(Color::DarkYellow),
+                SetForegroundColor(ui::ACCENT),
                 SetAttribute(Attribute::Bold),
                 Print(&label),
                 ResetColor,
@@ -357,7 +349,7 @@ fn draw(
     execute!(
         out,
         MoveTo(rx, item_row),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print("─".repeat(rw.min(35))),
         ResetColor,
     )
@@ -403,15 +395,12 @@ fn draw(
     }
 
     // Hint en bas
-    let hint = "[↑↓] Choisir   [Entree] Acheter   [Esc] Partir";
-    execute!(
+    ui::hint_bar(
         out,
-        MoveTo(rx, th.saturating_sub(2)),
-        SetForegroundColor(Color::DarkGrey),
-        Print(hint),
-        ResetColor,
-    )
-    .ok();
+        tw as usize,
+        th as usize,
+        "[↑↓] Choisir   [Entree] Acheter   [Esc] Partir",
+    );
 
     out.flush().ok();
 }

@@ -9,6 +9,7 @@ use crossterm::{
 };
 
 use crate::class::Class;
+use crate::ui;
 
 // ─── SÉLECTION DE CLASSE ─────────────────────────────────────────────────────
 
@@ -60,16 +61,7 @@ fn draw_class_select(out: &mut io::Stdout, selected: usize) {
     execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
 
     // En-tête
-    let title = "  CHOISIR VOTRE CLASSE  ";
-    let bar = "═".repeat((tw as usize).saturating_sub(title.len() + 4));
-    execute!(
-        out,
-        SetForegroundColor(Color::DarkYellow),
-        SetAttribute(Attribute::Bold),
-        Print(format!("══{}{}══\r\n", title, bar)),
-        ResetColor,
-    )
-    .ok();
+    ui::top_header(out, "CHOISIR VOTRE CLASSE", "", ui::ACCENT, tw as usize);
 
     let names = ["CHEVALIER", "MAGE", "VOLEUR"];
     let descs = [
@@ -99,7 +91,7 @@ fn draw_class_select(out: &mut io::Stdout, selected: usize) {
             1 => Color::Rgb { r: 255, g: 140, b: 30 },  // Mage - orange
             _ => Color::Rgb { r: 60, g: 200, b: 80 },   // Voleur - vert
         };
-        let color = if is_sel { sel_color } else { Color::DarkGrey };
+        let color = if is_sel { sel_color } else { ui::DIM };
 
         // Nom de classe
         let label = if is_sel {
@@ -121,7 +113,7 @@ fn draw_class_select(out: &mut io::Stdout, selected: usize) {
         execute!(
             out,
             MoveTo(cx, 3),
-            SetForegroundColor(if is_sel { Color::Grey } else { Color::DarkGrey }),
+            SetForegroundColor(if is_sel { Color::Grey } else { ui::DIM }),
             Print(trunc(descs[col], art_w)),
             ResetColor
         )
@@ -131,7 +123,7 @@ fn draw_class_select(out: &mut io::Stdout, selected: usize) {
         execute!(
             out,
             MoveTo(cx, 4),
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print("─".repeat(art_w)),
             ResetColor
         )
@@ -158,7 +150,7 @@ fn draw_class_select(out: &mut io::Stdout, selected: usize) {
         execute!(
             out,
             MoveTo(cx, stat_y - 1),
-            SetForegroundColor(Color::DarkGrey),
+            SetForegroundColor(ui::DIM),
             Print("─".repeat(art_w)),
             ResetColor
         )
@@ -191,24 +183,12 @@ fn draw_class_select(out: &mut io::Stdout, selected: usize) {
     }
 
     // Hint
-    let hint = "[←→] Choisir    [Entree] Confirmer";
-    let hx = (tw.saturating_sub(hint.len() as u16)) / 2;
-    execute!(
+    ui::hint_bar(
         out,
-        MoveTo(0, th.saturating_sub(2)),
-        SetForegroundColor(Color::DarkGrey),
-        Print(format!("  {}", "─".repeat((tw as usize).saturating_sub(4)))),
-        ResetColor
-    )
-    .ok();
-    execute!(
-        out,
-        MoveTo(hx, th.saturating_sub(1)),
-        SetForegroundColor(Color::DarkGrey),
-        Print(hint),
-        ResetColor
-    )
-    .ok();
+        tw as usize,
+        th as usize,
+        "[←→] Choisir    [Entree] Confirmer",
+    );
 
     out.flush().ok();
 }
@@ -332,16 +312,7 @@ fn draw_lore_page(out: &mut io::Stdout, lines: &[&str], title: &str, page: usize
     execute!(out, Clear(ClearType::All), MoveTo(0, 0)).ok();
 
     // En-tête
-    let header = format!("  {}  ", title);
-    let bar = "═".repeat((tw as usize).saturating_sub(header.len() + 4));
-    execute!(
-        out,
-        SetForegroundColor(Color::DarkYellow),
-        SetAttribute(Attribute::Bold),
-        Print(format!("══{}{}══\r\n", header, bar)),
-        ResetColor,
-    )
-    .ok();
+    ui::top_header(out, title, "", ui::ACCENT, tw as usize);
 
     // Corps centré verticalement
     let text_h = lines.len() as u16;
@@ -371,7 +342,7 @@ fn draw_lore_page(out: &mut io::Stdout, lines: &[&str], title: &str, page: usize
     execute!(
         out,
         MoveTo(0, th.saturating_sub(3)),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print(format!("  {}", "─".repeat((tw as usize).saturating_sub(4)))),
         ResetColor
     )
@@ -381,7 +352,7 @@ fn draw_lore_page(out: &mut io::Stdout, lines: &[&str], title: &str, page: usize
     execute!(
         out,
         MoveTo(2, th.saturating_sub(2)),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print(&page_label),
         ResetColor
     )
@@ -396,7 +367,7 @@ fn draw_lore_page(out: &mut io::Stdout, lines: &[&str], title: &str, page: usize
     execute!(
         out,
         MoveTo(hx, th.saturating_sub(2)),
-        SetForegroundColor(Color::DarkGrey),
+        SetForegroundColor(ui::DIM),
         Print(hint),
         ResetColor
     )
