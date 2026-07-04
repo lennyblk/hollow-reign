@@ -76,26 +76,68 @@ struct ShopEntry {
 }
 
 const ASHFELD_SHOP: &[ShopEntry] = &[
-    ShopEntry { item_name: "Bandage",        price: 50  },
-    ShopEntry { item_name: "Antidote",       price: 70  },
-    ShopEntry { item_name: "Frost Salts",    price: 80  },
-    ShopEntry { item_name: "Throwing Knife", price: 90  },
+    ShopEntry {
+        item_name: "Bandage",
+        price: 10,
+    },
+    ShopEntry {
+        item_name: "Antidote",
+        price: 10,
+    },
+    ShopEntry {
+        item_name: "Frost Salts",
+        price: 20,
+    },
+    ShopEntry {
+        item_name: "Throwing Knife",
+        price: 30,
+    },
 ];
 
 const ROTWOOD_SHOP: &[ShopEntry] = &[
-    ShopEntry { item_name: "Cooling Salve",  price: 110 },
-    ShopEntry { item_name: "Purifying Salt", price: 120 },
-    ShopEntry { item_name: "Siege Ash",      price: 140 },
-    ShopEntry { item_name: "Haste Draught",  price: 160 },
-    ShopEntry { item_name: "Bandage",        price: 80  },
+    ShopEntry {
+        item_name: "Cooling Salve",
+        price: 20,
+    },
+    ShopEntry {
+        item_name: "Purifying Salt",
+        price: 30,
+    },
+    ShopEntry {
+        item_name: "Siege Ash",
+        price: 20,
+    },
+    ShopEntry {
+        item_name: "Haste Draught",
+        price: 30,
+    },
+    ShopEntry {
+        item_name: "Bandage",
+        price: 10,
+    },
 ];
 
 const FROSTVEIL_SHOP: &[ShopEntry] = &[
-    ShopEntry { item_name: "Grounding Wrap", price: 220 },
-    ShopEntry { item_name: "Frost Salts",    price: 130 },
-    ShopEntry { item_name: "Haste Draught",  price: 190 },
-    ShopEntry { item_name: "Siege Ash",      price: 170 },
-    ShopEntry { item_name: "Antidote",       price: 110 },
+    ShopEntry {
+        item_name: "Grounding Wrap",
+        price: 50,
+    },
+    ShopEntry {
+        item_name: "Frost Salts",
+        price: 20,
+    },
+    ShopEntry {
+        item_name: "Haste Draught",
+        price: 30,
+    },
+    ShopEntry {
+        item_name: "Siege Ash",
+        price: 20,
+    },
+    ShopEntry {
+        item_name: "Antidote",
+        price: 10,
+    },
 ];
 
 fn shop_for_zone(zone: ZoneId) -> (&'static str, &'static [ShopEntry]) {
@@ -135,7 +177,12 @@ pub fn open_merchant(out: &mut io::Stdout, player: &mut Player, zone: ZoneId) {
 
         flash = None;
 
-        if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
+        if let Ok(Event::Key(KeyEvent {
+            code,
+            kind: KeyEventKind::Press,
+            ..
+        })) = event::read()
+        {
             match code {
                 KeyCode::Up if selected > 0 => selected -= 1,
                 KeyCode::Down if selected + 1 < items.len() => selected += 1,
@@ -184,19 +231,23 @@ fn draw(
         SetAttribute(Attribute::Bold),
         Print(format!("══{}{}══\r\n", header, "═".repeat(bar_len))),
         ResetColor,
-    ).ok();
+    )
+    .ok();
 
     // ── Art du marchand (colonne gauche) ──────────────────────────────────────
     for (row, line) in MERCHANT_ART.lines().enumerate() {
         let y = 1 + row as u16;
-        if y >= th.saturating_sub(3) { break; }
+        if y >= th.saturating_sub(3) {
+            break;
+        }
         execute!(
             out,
             MoveTo(0, y),
             SetForegroundColor(Color::DarkYellow),
             Print(line),
             ResetColor,
-        ).ok();
+        )
+        .ok();
     }
 
     // ── Séparateur vertical ───────────────────────────────────────────────────
@@ -207,7 +258,8 @@ fn draw(
             SetForegroundColor(Color::DarkGrey),
             Print("│"),
             ResetColor,
-        ).ok();
+        )
+        .ok();
     }
 
     // ── Panneau droit ─────────────────────────────────────────────────────────
@@ -222,7 +274,8 @@ fn draw(
         SetAttribute(Attribute::Bold),
         Print(format!("Ames : {}", player.souls)),
         ResetColor,
-    ).ok();
+    )
+    .ok();
 
     // Séparateur
     execute!(
@@ -231,7 +284,8 @@ fn draw(
         SetForegroundColor(Color::DarkGrey),
         Print("─".repeat(rw.min(35))),
         ResetColor,
-    ).ok();
+    )
+    .ok();
 
     // Accueil du marchand (word-wrapped)
     let mut greet_row = 4u16;
@@ -242,7 +296,8 @@ fn draw(
             SetForegroundColor(Color::Cyan),
             Print(line),
             ResetColor,
-        ).ok();
+        )
+        .ok();
         greet_row += 1;
     }
     greet_row += 1;
@@ -254,7 +309,8 @@ fn draw(
         SetForegroundColor(Color::DarkGrey),
         Print("─".repeat(rw.min(35))),
         ResetColor,
-    ).ok();
+    )
+    .ok();
     greet_row += 1;
 
     // Liste des items
@@ -265,7 +321,13 @@ fn draw(
         // Prix aligné à droite dans un champ de 6
         let name_max = rw.min(35).saturating_sub(8);
         let name_trunc = truncate_str(entry.item_name, name_max);
-        let label = format!("{}{:<width$}{:>5}a", prefix, name_trunc, entry.price, width = name_max);
+        let label = format!(
+            "{}{:<width$}{:>5}a",
+            prefix,
+            name_trunc,
+            entry.price,
+            width = name_max
+        );
 
         if is_sel {
             execute!(
@@ -275,7 +337,8 @@ fn draw(
                 SetAttribute(Attribute::Bold),
                 Print(&label),
                 ResetColor,
-            ).ok();
+            )
+            .ok();
         } else {
             execute!(
                 out,
@@ -283,7 +346,8 @@ fn draw(
                 SetForegroundColor(Color::White),
                 Print(&label),
                 ResetColor,
-            ).ok();
+            )
+            .ok();
         }
         item_row += 1;
     }
@@ -296,25 +360,29 @@ fn draw(
         SetForegroundColor(Color::DarkGrey),
         Print("─".repeat(rw.min(35))),
         ResetColor,
-    ).ok();
+    )
+    .ok();
     item_row += 1;
 
     if let Some(item) = item_by_name(items[selected].item_name) {
         let desc = match &item {
             crate::item::Item::Consumable(c) => c.description,
-            crate::item::Item::Weapon(w)     => w.description,
-            crate::item::Item::Armor(a)      => a.description,
-            crate::item::Item::Shield(s)     => s.description,
+            crate::item::Item::Weapon(w) => w.description,
+            crate::item::Item::Armor(a) => a.description,
+            crate::item::Item::Shield(s) => s.description,
         };
         for line in wrap_str(desc, rw.min(35)) {
-            if item_row >= th.saturating_sub(4) { break; }
+            if item_row >= th.saturating_sub(4) {
+                break;
+            }
             execute!(
                 out,
                 MoveTo(rx, item_row),
                 SetForegroundColor(Color::Grey),
                 Print(line),
                 ResetColor,
-            ).ok();
+            )
+            .ok();
             item_row += 1;
         }
     }
@@ -330,7 +398,8 @@ fn draw(
             SetAttribute(Attribute::Bold),
             Print(msg),
             ResetColor,
-        ).ok();
+        )
+        .ok();
     }
 
     // Hint en bas
@@ -341,7 +410,8 @@ fn draw(
         SetForegroundColor(Color::DarkGrey),
         Print(hint),
         ResetColor,
-    ).ok();
+    )
+    .ok();
 
     out.flush().ok();
 }
@@ -349,23 +419,38 @@ fn draw(
 // ─── UTILITAIRES ─────────────────────────────────────────────────────────────
 
 fn wrap_str(text: &str, width: usize) -> Vec<&str> {
-    if width == 0 { return vec![text]; }
+    if width == 0 {
+        return vec![text];
+    }
     let mut lines = Vec::new();
     let mut start = 0;
     while start < text.len() {
         let remaining = &text[start..];
-        if remaining.chars().count() <= width { lines.push(remaining); break; }
-        let end_byte = remaining.char_indices().nth(width).map(|(i, _)| i).unwrap_or(remaining.len());
+        if remaining.chars().count() <= width {
+            lines.push(remaining);
+            break;
+        }
+        let end_byte = remaining
+            .char_indices()
+            .nth(width)
+            .map(|(i, _)| i)
+            .unwrap_or(remaining.len());
         let cut_byte = remaining[..end_byte].rfind(' ').unwrap_or(end_byte);
         lines.push(&remaining[..cut_byte]);
-        let skip = if remaining[cut_byte..].starts_with(' ') { 1 } else { 0 };
+        let skip = if remaining[cut_byte..].starts_with(' ') {
+            1
+        } else {
+            0
+        };
         start += cut_byte + skip;
     }
     lines
 }
 
 fn truncate_str(s: &str, max: usize) -> &str {
-    if s.chars().count() <= max { return s; }
+    if s.chars().count() <= max {
+        return s;
+    }
     let end = s.char_indices().nth(max).map(|(i, _)| i).unwrap_or(s.len());
     &s[..end]
 }
