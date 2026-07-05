@@ -230,14 +230,6 @@ cargo build --release
 ./target/release/hollow-reign
 ```
 
-If you do not want audio, you can disable it in `Cargo.toml`:
-
-```toml
-rodio = { version = "0.19", default-features = false }
-```
-
-The title screen music will not play but the game will run normally.
-
 ---
 
 ## Notes
@@ -288,3 +280,4 @@ src/
 | rodio 0.19 | Audio playback (title WAV music) |
 | serde / serde_json | Save and load in JSON |
 | rand 0.8 | RNG for spawns and combat |
+| self_update 0.41 | Auto-update from GitHub releases |
