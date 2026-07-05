@@ -314,9 +314,22 @@ enum DialoguePhase {
     NoQuest,
 }
 
+/// Vérifie si le joueur possède un item (inventaire OU équipement).
+fn player_has_item(player: &Player, item_name: &str) -> bool {
+    if player.inventory.iter().any(|i| i.name() == item_name) {
+        return true;
+    }
+    for eq in &player.equipment {
+        if eq.weapon.as_ref().map(|i| i.name() == item_name).unwrap_or(false) { return true; }
+        if eq.armor.as_ref().map(|i| i.name() == item_name).unwrap_or(false) { return true; }
+        if eq.shield.as_ref().map(|i| i.name() == item_name).unwrap_or(false) { return true; }
+        if eq.consumables.iter().any(|i| i.name() == item_name) { return true; }
+    }
+    false
+}
+
 fn current_phase(player: &Player, data: &NpcData) -> DialoguePhase {
     if data.required_item.is_none() {
-        // Le Pelerin Pale - pas de quête
         if player.completed_quests.contains(data.name) {
             return DialoguePhase::Done;
         }
@@ -327,17 +340,20 @@ fn current_phase(player: &Player, data: &NpcData) -> DialoguePhase {
         return DialoguePhase::Done;
     }
 
+    let has_item = data
+        .required_item
+        .map(|req| player_has_item(player, req))
+        .unwrap_or(false);
+
     if player.active_quests.contains(data.name) {
-        // Quête active — est-ce que le joueur a l'item ?
-        let has_item = data
-            .required_item
-            .map(|req| player.inventory.iter().any(|i| i.name() == req))
-            .unwrap_or(false);
         if has_item {
             DialoguePhase::CanComplete
         } else {
             DialoguePhase::Active
         }
+    } else if has_item {
+        // Joueur a déjà l'item mais n'a pas encore parlé au NPC
+        DialoguePhase::CanComplete
     } else {
         DialoguePhase::Intro
     }

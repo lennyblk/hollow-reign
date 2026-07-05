@@ -20,6 +20,8 @@ use crate::ui;
 pub enum InventoryResult {
     Closed,
     ConsumedItem,
+    /// Effet qui nécessite le contexte combat (dégâts, buff, etc.)
+    CombatEffect(crate::item::ConsumableEffect),
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -33,6 +35,7 @@ enum ItemAction {
     Consumed,
     Equipped,
     ShowMap,
+    CombatUse(ConsumableEffect),
 }
 
 // Colonnes plein écran — art Knight ~43 chars large depuis x=2 → stats à x=48
@@ -56,6 +59,7 @@ pub fn open_inventory(out: &mut io::Stdout, player: &mut Player, inline: bool) -
     let mut tab      = Tab::Inventory;
     let mut selected = 0usize;
     let mut consumed = false;
+    let mut combat_effect: Option<ConsumableEffect> = None;
 
     'main: loop {
         let (tw, th) = terminal::size().unwrap_or((120, 30));
@@ -97,6 +101,10 @@ pub fn open_inventory(out: &mut io::Stdout, player: &mut Player, inline: bool) -
                         ItemAction::ShowMap => {
                             map_ui::show_world_map(out);
                         }
+                        ItemAction::CombatUse(effect) => {
+                            combat_effect = Some(effect);
+                            if inline { break 'main; }
+                        }
                         ItemAction::None => {}
                     }
                 }
@@ -121,7 +129,13 @@ pub fn open_inventory(out: &mut io::Stdout, player: &mut Player, inline: bool) -
         terminal::disable_raw_mode().ok();
     }
 
-    if consumed { InventoryResult::ConsumedItem } else { InventoryResult::Closed }
+    if let Some(effect) = combat_effect {
+        InventoryResult::CombatEffect(effect)
+    } else if consumed {
+        InventoryResult::ConsumedItem
+    } else {
+        InventoryResult::Closed
+    }
 }
 
 // ─── ACTIONS ─────────────────────────────────────────────────────────────────
@@ -140,11 +154,21 @@ fn use_or_equip(player: &mut Player, index: usize) -> ItemAction {
                 player.inventory.insert(index, Item::Consumable(cd));
                 return ItemAction::ShowMap;
             }
-            if player.use_consumable(&cd.effect) {
-                ItemAction::Consumed
-            } else {
-                player.inventory.insert(index, Item::Consumable(cd));
-                ItemAction::None
+            match cd.effect {
+                ConsumableEffect::DealDamage(_)
+                | ConsumableEffect::DealFireDamage(_)
+                | ConsumableEffect::BuffAttack { .. } => {
+                    // Effet combat : on consomme l'item, l'effet sera appliqué par combat_ui
+                    ItemAction::CombatUse(cd.effect)
+                }
+                _ => {
+                    if player.use_consumable(&cd.effect) {
+                        ItemAction::Consumed
+                    } else {
+                        player.inventory.insert(index, Item::Consumable(cd));
+                        ItemAction::None
+                    }
+                }
             }
         } else {
             ItemAction::None

@@ -13,7 +13,7 @@ use crate::combat::Combat;
 use crate::enemy::{Enemy, EnemyType};
 use crate::enemy_catalog::{drops, spawn};
 use crate::inventory_ui::{InventoryResult, open_inventory};
-use crate::item::Item;
+use crate::item::{ConsumableEffect, Element, Item, WeaponEffect};
 use crate::phrases::{Difficulty, PhrasePool};
 use crate::player::Player;
 use crate::typing::{combat_challenge, perfect_threshold, time_limit_ms};
@@ -229,10 +229,11 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
         // Ticks élémentaires en début de tour
         let tick = Combat::tick_player_effects(player);
         if tick > 0 {
+            let remaining = player_tick_summary(player);
             push_log(
                 &mut log,
                 LogKind::Effect,
-                format!("Effets sur toi : -{} PV", tick),
+                format!("Effets sur toi : -{} PV. {}", tick, remaining),
             );
         }
         for i in 0..combat.enemies.len() {
@@ -293,7 +294,7 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                         // Attaque normale
                         KeyCode::Char('a') | KeyCode::Char('A') => {
                             if let Some(target) = select_target(&mut out, &combat) {
-                                let base = base_damage(player);
+                                let base = base_damage(player, &combat);
                                 let dmg = combat.player_attack(target, base);
                                 let name = combat.enemies[target].name.clone();
                                 push_log(
@@ -333,25 +334,45 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                                 terminal::enable_raw_mode().ok();
                                 execute!(out, Hide).ok();
 
-                                let base = base_damage(player);
-                                let (dmg, burst) =
+                                let base = base_damage(player, &combat);
+                                let (dmg, burst, effect_dmg) =
                                     combat.player_elemental_attack(player, target, base, parry);
                                 let name = combat.enemies[target].name.clone();
-                                if burst > 0 {
-                                    push_log(
-                                        &mut log,
-                                        LogKind::PlayerHit,
-                                        format!(
-                                            "Attaque speciale sur {} : {} dmg + {} burst!",
-                                            name, dmg, burst
-                                        ),
-                                    );
-                                } else {
-                                    push_log(
-                                        &mut log,
-                                        LogKind::PlayerHit,
-                                        format!("Attaque speciale sur {} : {} degats.", name, dmg),
-                                    );
+                                let ability_name = player.equipment.first()
+                                    .and_then(|eq| eq.weapon.as_ref())
+                                    .and_then(|w| if let Item::Weapon(wd) = w { Some(wd.ability.name) } else { None })
+                                    .unwrap_or("Speciale");
+                                let total = dmg + burst + effect_dmg;
+                                let mut parts = vec![format!("{} dmg", dmg)];
+                                if burst > 0 { parts.push(format!("{} burst", burst)); }
+                                if effect_dmg > 0 { parts.push(format!("{} effet", effect_dmg)); }
+                                push_log(
+                                    &mut log,
+                                    LogKind::PlayerHit,
+                                    format!("{} sur {} : {}", ability_name, name, parts.join(" + ")),
+                                );
+                                // Log supplémentaire pour effets non-dégâts
+                                if let Some(eq) = player.equipment.first() {
+                                    if let Some(Item::Weapon(wd)) = &eq.weapon {
+                                        match &wd.ability.effect {
+                                            WeaponEffect::Lifesteal { .. } => {
+                                                push_log(&mut log, LogKind::Heal, format!("{} : soin!", ability_name));
+                                            }
+                                            WeaponEffect::InstantStun => {
+                                                push_log(&mut log, LogKind::PlayerHit, format!("{} etourdi!", name));
+                                            }
+                                            WeaponEffect::ArmorBreak { .. } => {
+                                                push_log(&mut log, LogKind::PlayerHit, format!("Armure de {} brisee!", name));
+                                            }
+                                            WeaponEffect::EmpoweredStrike { .. } => {
+                                                push_log(&mut log, LogKind::PlayerHit, "Prochaine attaque renforcee!".to_string());
+                                            }
+                                            WeaponEffect::ExtendedRot { .. } => {
+                                                push_log(&mut log, LogKind::PlayerHit, format!("Pourriture de {} prolongee!", name));
+                                            }
+                                            _ => {}
+                                        }
+                                    }
                                 }
                                 // Le spécial « crit » (cyan + étincelles) et cumule burst.
                                 play_fx(
@@ -363,7 +384,7 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                                     zone,
                                     &mut shown,
                                     FxTarget::Enemy(target),
-                                    dmg + burst,
+                                    total,
                                     true,
                                 );
                             }
@@ -405,8 +426,16 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                                 zone,
                                 &mut shown,
                             );
-                            if let InventoryResult::ConsumedItem = inv_result {
-                                break 'input;
+                            match inv_result {
+                                InventoryResult::ConsumedItem => { break 'input; }
+                                InventoryResult::CombatEffect(effect) => {
+                                    apply_combat_consumable(
+                                        &mut out, player, &mut combat, &mut log,
+                                        zone, &mut shown, effect,
+                                    );
+                                    break 'input;
+                                }
+                                _ => {}
                             }
                         }
                         // Fuite
@@ -425,7 +454,19 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
 
         // ── Tours des ennemis ─────────────────────────────────────────────────
         for i in 0..combat.enemies.len() {
-            if !combat.enemies[i].is_alive() || !combat.enemies[i].can_act() {
+            if !combat.enemies[i].is_alive() {
+                continue;
+            }
+            if !combat.enemies[i].can_act() {
+                use crate::status::Status;
+                let ename = combat.enemies[i].name.clone();
+                let msg = match &combat.enemies[i].status {
+                    Status::Frozen { .. } => format!("{} est gele, passe son tour!", ename),
+                    Status::Electrocuted { .. } => format!("{} est electrocute, passe son tour!", ename),
+                    Status::Stunned { .. } => format!("{} est etourdi, passe son tour!", ename),
+                    _ => format!("{} ne peut pas agir!", ename),
+                };
+                push_log(&mut log, LogKind::Info, msg);
                 continue;
             }
             let name = combat.enemies[i].name.clone();
@@ -448,6 +489,8 @@ pub fn run_combat(player: &mut Player, zone: ZoneId, spawns: &[EnemySpawn]) -> C
                     LogKind::EnemyHit,
                     format!("{} attaque elementaire : -{} PV.", name, dmg),
                 );
+                // Log stacks/status appliqués au joueur
+                log_player_status_change(&mut log, player);
                 play_fx(
                     &mut out,
                     player,
@@ -612,8 +655,53 @@ fn select_target(out: &mut io::Stdout, combat: &Combat) -> Option<usize> {
     }
 }
 
-fn base_damage(player: &Player) -> u32 {
-    5 + player.stats.strength + player.stats.dexterity / 2
+fn base_damage(player: &Player, combat: &Combat) -> u32 {
+    5 + player.stats.strength + player.stats.dexterity / 2 + combat.attack_buff_bonus
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_combat_consumable(
+    out: &mut io::Stdout,
+    player: &Player,
+    combat: &mut Combat,
+    log: &mut Vec<(LogKind, String)>,
+    zone: ZoneId,
+    shown: &mut Shown,
+    effect: ConsumableEffect,
+) {
+    let first_alive = combat.enemies.iter().position(|e| e.is_alive());
+    match effect {
+        ConsumableEffect::DealDamage(dmg) => {
+            if let Some(t) = first_alive {
+                let dealt = combat.enemies[t].take_damage(dmg);
+                let name = combat.enemies[t].name.clone();
+                push_log(log, LogKind::PlayerHit, format!("Couteau lance sur {} : {} degats.", name, dealt));
+                play_fx(out, player, combat, log, combat.turn, zone, shown, FxTarget::Enemy(t), dealt, false);
+            }
+        }
+        ConsumableEffect::DealFireDamage(dmg) => {
+            if let Some(t) = first_alive {
+                let dealt = combat.enemies[t].take_damage(dmg);
+                let burst = combat.enemies[t].apply_elemental_stack(&Element::Fire);
+                combat.enemies[t].take_elemental_damage(burst);
+                let name = combat.enemies[t].name.clone();
+                if burst > 0 {
+                    push_log(log, LogKind::PlayerHit, format!("Bombe de feu sur {} : {} + {} burst!", name, dealt, burst));
+                } else {
+                    let stacks = combat.enemies[t].fire.stacks;
+                    push_log(log, LogKind::PlayerHit, format!("Bombe de feu sur {} : {} degats. Feu {}/3", name, dealt, stacks));
+                }
+                play_fx(out, player, combat, log, combat.turn, zone, shown, FxTarget::Enemy(t), dealt + burst, burst > 0);
+            }
+        }
+        ConsumableEffect::BuffAttack { bonus, turns } => {
+            combat.attack_buff_bonus = bonus;
+            combat.attack_buff_turns = turns;
+            push_log(log, LogKind::Info, format!("Elixir : +{} degats pour {} tours.", bonus, turns));
+            draw_animated(out, player, combat, log, combat.turn, zone, shown);
+        }
+        _ => {}
+    }
 }
 
 fn zone_enemy_color(zone: ZoneId) -> Color {
@@ -659,6 +747,42 @@ fn enemy_difficulty(et: EnemyType) -> Difficulty {
     }
 }
 
+/// Log les effets de status actifs sur le joueur après une attaque élémentaire.
+fn log_player_status_change(log: &mut Vec<(LogKind, String)>, player: &Player) {
+    use crate::status::Status;
+    match &player.status {
+        Status::Frozen { turns_remaining } => {
+            push_log(log, LogKind::Effect, format!("Tu es GELE pour {} tour(s)!", turns_remaining));
+        }
+        Status::Electrocuted { turns_remaining } => {
+            push_log(log, LogKind::Effect, format!("Tu es ELECTROCUTE pour {} tour(s)!", turns_remaining));
+        }
+        _ => {}
+    }
+    if player.poison.is_ticking() {
+        push_log(log, LogKind::Effect, format!("Poison actif : {} tour(s) restants.", player.poison.tick_turns));
+    }
+    if player.bleed.is_ticking() {
+        push_log(log, LogKind::Effect, format!("Saignement actif : {} tour(s) restants.", player.bleed.tick_turns));
+    }
+    if player.fire.is_ticking() {
+        push_log(log, LogKind::Effect, format!("Brulure active : {} tour(s) restants.", player.fire.tick_turns));
+    }
+    if player.rot.is_ticking() {
+        push_log(log, LogKind::Effect, format!("Pourriture active : {} tour(s) restants.", player.rot.tick_turns));
+    }
+}
+
+/// Résumé des ticks restants pour le log.
+fn player_tick_summary(player: &Player) -> String {
+    let mut parts = Vec::new();
+    if player.poison.is_ticking() { parts.push(format!("Poison {}t", player.poison.tick_turns)); }
+    if player.bleed.is_ticking() { parts.push(format!("Saign. {}t", player.bleed.tick_turns)); }
+    if player.rot.is_ticking() { parts.push(format!("Pourri. {}t", player.rot.tick_turns)); }
+    if player.fire.is_ticking() { parts.push(format!("Feu {}t", player.fire.tick_turns)); }
+    parts.join(" ")
+}
+
 fn push_log(log: &mut Vec<(LogKind, String)>, kind: LogKind, msg: String) {
     log.push((kind, msg));
     if log.len() > 6 {
@@ -673,6 +797,103 @@ fn print_element_badges(out: &mut io::Stdout, enemy: &Enemy) {
             execute!(out, Print(" ")).ok();
         }
         ui::badge(out, ui::element_label(el), ui::element_color(el));
+    }
+}
+
+/// Stacks élémentaires sur l'ennemi (visible par le joueur).
+fn print_enemy_stacks(out: &mut io::Stdout, enemy: &Enemy) {
+    use crate::status::Status;
+    let stacks: Vec<(&str, Color, u32, u32)> = vec![
+        ("Poison", ui::element_color(&Element::Poison), enemy.poison.stacks, enemy.poison.tick_turns),
+        ("Saign.", ui::element_color(&Element::Bleed), enemy.bleed.stacks, enemy.bleed.tick_turns),
+        ("Pourri", ui::element_color(&Element::Rot), enemy.rot.stacks, enemy.rot.tick_turns),
+        ("Feu",    ui::element_color(&Element::Fire), enemy.fire.stacks, enemy.fire.tick_turns),
+        ("Givre",  ui::element_color(&Element::Ice), enemy.frost.stacks, 0),
+        ("Foudre", ui::element_color(&Element::Lightning), enemy.lightning.stacks, 0),
+    ];
+    let mut any = false;
+    // Status CC de l'ennemi
+    match &enemy.status {
+        Status::Frozen { turns_remaining } => {
+            execute!(out, SetForegroundColor(ui::element_color(&Element::Ice)),
+                SetAttribute(Attribute::Bold), Print(format!("GELE {}t", turns_remaining)), ResetColor).ok();
+            any = true;
+        }
+        Status::Electrocuted { turns_remaining } => {
+            execute!(out, SetForegroundColor(ui::element_color(&Element::Lightning)),
+                SetAttribute(Attribute::Bold), Print(format!("ELEC {}t", turns_remaining)), ResetColor).ok();
+            any = true;
+        }
+        Status::Stunned { turns_remaining } => {
+            execute!(out, SetForegroundColor(Color::White),
+                SetAttribute(Attribute::Bold), Print(format!("STUN {}t", turns_remaining)), ResetColor).ok();
+            any = true;
+        }
+        _ => {}
+    }
+    for (name, color, s, tick) in &stacks {
+        if *s > 0 || *tick > 0 {
+            if any { execute!(out, Print(" ")).ok(); }
+            any = true;
+            if *tick > 0 {
+                execute!(out, SetForegroundColor(*color), Print(format!("{} {}t", name, tick)), ResetColor).ok();
+            } else {
+                execute!(out, SetForegroundColor(*color), Print(format!("stack {} {}/3", name, s)), ResetColor).ok();
+            }
+        }
+    }
+}
+
+/// Status actifs du joueur (ticks, stacks, freeze, etc.).
+fn print_player_status(out: &mut io::Stdout, player: &Player) {
+    use crate::status::Status;
+    let mut parts: Vec<(String, Color)> = Vec::new();
+
+    // Ticking effects
+    if player.poison.is_ticking() {
+        parts.push((format!("Poison {}t", player.poison.tick_turns), ui::element_color(&Element::Poison)));
+    } else if player.poison.stacks > 0 {
+        parts.push((format!("stack Poison {}/3", player.poison.stacks), ui::element_color(&Element::Poison)));
+    }
+    if player.bleed.is_ticking() {
+        parts.push((format!("Saign. {}t", player.bleed.tick_turns), ui::element_color(&Element::Bleed)));
+    } else if player.bleed.stacks > 0 {
+        parts.push((format!("stack Saign. {}/3", player.bleed.stacks), ui::element_color(&Element::Bleed)));
+    }
+    if player.rot.is_ticking() {
+        parts.push((format!("Pourri. {}t", player.rot.tick_turns), ui::element_color(&Element::Rot)));
+    } else if player.rot.stacks > 0 {
+        parts.push((format!("stack Pourri. {}/3", player.rot.stacks), ui::element_color(&Element::Rot)));
+    }
+    if player.fire.is_ticking() {
+        parts.push((format!("Feu {}t", player.fire.tick_turns), ui::element_color(&Element::Fire)));
+    } else if player.fire.stacks > 0 {
+        parts.push((format!("stack Feu {}/3", player.fire.stacks), ui::element_color(&Element::Fire)));
+    }
+    if player.frost.stacks > 0 {
+        parts.push((format!("stack Givre {}/3", player.frost.stacks), ui::element_color(&Element::Ice)));
+    }
+    if player.lightning.stacks > 0 {
+        parts.push((format!("stack Foudre {}/3", player.lightning.stacks), ui::element_color(&Element::Lightning)));
+    }
+
+    // Hard CC
+    match &player.status {
+        Status::Frozen { turns_remaining } => {
+            parts.push((format!("GELE {}t", turns_remaining), ui::element_color(&Element::Ice)));
+        }
+        Status::Electrocuted { turns_remaining } => {
+            parts.push((format!("ELEC {}t", turns_remaining), ui::element_color(&Element::Lightning)));
+        }
+        Status::Stunned { turns_remaining } => {
+            parts.push((format!("STUN {}t", turns_remaining), Color::White));
+        }
+        _ => {}
+    }
+
+    for (i, (text, color)) in parts.iter().enumerate() {
+        if i > 0 { execute!(out, Print(" ")).ok(); }
+        execute!(out, SetForegroundColor(*color), SetAttribute(Attribute::Bold), Print(text), ResetColor).ok();
     }
 }
 
@@ -1041,6 +1262,9 @@ fn draw_enemies_columns(
                 2 => {
                     print_element_badges(out, e);
                 }
+                3 => {
+                    print_enemy_stacks(out, e);
+                }
                 _ => {}
             }
         }
@@ -1097,7 +1321,7 @@ fn draw_1v1_side_by_side(
         .unwrap_or(0)
         .min(mid as usize - 6);
 
-    let rows = p_ascii.len().max(e_ascii.len()).max(4) as u16;
+    let rows = p_ascii.len().max(e_ascii.len()).max(5) as u16;
 
     let enemy_visually_alive = enemy.is_alive() || shown.enemies[0] > 0;
 
@@ -1145,6 +1369,9 @@ fn draw_1v1_side_by_side(
             3 => {
                 print_special_status(out, combat.player_elemental_cooldown);
             }
+            4 => {
+                print_player_status(out, player);
+            }
             _ => {}
         }
 
@@ -1190,6 +1417,9 @@ fn draw_1v1_side_by_side(
                 2 => {
                     print_element_badges(out, enemy);
                 }
+                3 => {
+                    print_enemy_stacks(out, enemy);
+                }
                 _ => {}
             }
         } else if idx == 0 {
@@ -1228,7 +1458,7 @@ fn draw_player_block(
     // Tremblement via l'indentation de gauche (pas de MoveTo ici).
     let lead = (2i16 + pfx.map(|f| f.shake()).unwrap_or(0)).max(0) as usize;
 
-    let row_count = ascii_lines.len().max(4);
+    let row_count = ascii_lines.len().max(5);
     let rows_u16 = row_count as u16;
 
     for i in 0..row_count {
@@ -1267,6 +1497,9 @@ fn draw_player_block(
             }
             3 => {
                 print_special_status(out, combat.player_elemental_cooldown);
+            }
+            4 => {
+                print_player_status(out, player);
             }
             _ => {}
         };

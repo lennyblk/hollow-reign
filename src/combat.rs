@@ -1,5 +1,5 @@
 use crate::enemy::Enemy;
-use crate::item::{Element, Item, WeaponAbility, WeaponEffect};
+use crate::item::{Element, Item, WeaponEffect};
 use crate::player::Player;
 
 const ELEMENTAL_COOLDOWN: u32 = 3;
@@ -35,12 +35,22 @@ pub struct Combat {
     pub player_elemental_cooldown: u32,
     /// Prochaine attaque normale boostée (Arcane Surge).
     pub player_empowered: bool,
+    /// Buff consommable : bonus d'attaque temporaire.
+    pub attack_buff_bonus: u32,
+    pub attack_buff_turns: u32,
 }
 
 impl Combat {
     pub fn new(enemies: Vec<Enemy>) -> Self {
         assert!(enemies.len() <= 3, "max 3 enemies per combat");
-        Combat { enemies, turn: 0, player_elemental_cooldown: 0, player_empowered: false }
+        Combat {
+            enemies,
+            turn: 0,
+            player_elemental_cooldown: 0,
+            player_empowered: false,
+            attack_buff_bonus: 0,
+            attack_buff_turns: 0,
+        }
     }
 
     pub fn is_over(&self, player: &Player) -> bool {
@@ -50,6 +60,12 @@ impl Combat {
     pub fn next_turn(&mut self) {
         self.turn += 1;
         self.player_elemental_cooldown = self.player_elemental_cooldown.saturating_sub(1);
+        if self.attack_buff_turns > 0 {
+            self.attack_buff_turns -= 1;
+            if self.attack_buff_turns == 0 {
+                self.attack_buff_bonus = 0;
+            }
+        }
     }
 
     /// Attaque normale du joueur sur un ennemi. Consomme Empowered si actif.
@@ -63,31 +79,17 @@ impl Combat {
         self.enemies[enemy_index].take_damage(damage)
     }
 
-    /// Attaque spéciale de l'arme (tous les 3 tours).
-    #[allow(dead_code)]
-    pub fn apply_weapon_ability(
+    /// Applique uniquement l'effet spécial de l'arme.
+    fn apply_weapon_effect_inner(
         &mut self,
         player: &mut Player,
         target_index: usize,
         element: &Element,
-        ability: &WeaponAbility,
+        effect: &WeaponEffect,
         base_damage: u32,
-        parry_result: &ParryResult,
+        mult: f32,
     ) -> u32 {
-        if self.player_elemental_cooldown > 0 {
-            return 0;
-        }
-        self.player_elemental_cooldown = ELEMENTAL_COOLDOWN;
-
-        let mult = parry_result.attack_multiplier();
-
-        // Burst élémentaire sur la cible (toujours présent)
-        let burst_raw = self.enemies[target_index].apply_elemental_stack(element);
-        let burst = (burst_raw as f32 * mult) as u32;
-        self.enemies[target_index].take_elemental_damage(burst);
-
-        // Effet spécial de l'arme
-        let special = match &ability.effect {
+        match effect {
             WeaponEffect::AoeElemental => {
                 let mut total = 0u32;
                 for i in 0..self.enemies.len() {
@@ -136,23 +138,21 @@ impl Combat {
                 self.player_empowered = true;
                 0
             }
-        };
-
-        burst + special
+        }
     }
 
     /// Attaque élémentaire du joueur (disponible tous les 3 tours).
-    /// Applique le multiplicateur de cycle + stack élémentaire sur l'ennemi.
-    /// Retourne (dégâts infligés, burst élémentaire déclenché).
+    /// Applique le multiplicateur de cycle + stack élémentaire + effet d'arme.
+    /// Retourne (dégâts infligés, burst élémentaire, dégâts effet d'arme).
     pub fn player_elemental_attack(
         &mut self,
-        player: &Player,
+        player: &mut Player,
         enemy_index: usize,
         base_damage: u32,
         parry_result: ParryResult,
-    ) -> (u32, u32) {
+    ) -> (u32, u32, u32) {
         if self.player_elemental_cooldown > 0 {
-            return (0, 0);
+            return (0, 0, 0);
         }
 
         let weapon_element = player_weapon_element(player);
@@ -162,23 +162,37 @@ impl Combat {
             _ => 1.0,
         };
 
-        let damage = (base_damage as f32
-            * parry_result.attack_multiplier()
-            * elemental_mult) as u32;
+        let mult = parry_result.attack_multiplier();
 
+        let damage = (base_damage as f32 * mult * elemental_mult) as u32;
         let dealt = self.enemies[enemy_index].take_damage(damage);
 
         let burst = if let Some(element) = &weapon_element {
             let burst_raw = self.enemies[enemy_index].apply_elemental_stack(element);
-            let burst_dealt = (burst_raw as f32 * parry_result.attack_multiplier()) as u32;
+            let burst_dealt = (burst_raw as f32 * mult) as u32;
             self.enemies[enemy_index].take_elemental_damage(burst_dealt);
             burst_dealt
         } else {
             0
         };
 
+        // Effet spécial de l'arme
+        let weapon_info: Option<(Element, WeaponEffect)> = player.equipment.first()
+            .and_then(|eq| eq.weapon.as_ref())
+            .and_then(|w| if let Item::Weapon(wd) = w {
+                Some((wd.element, wd.ability.effect.clone()))
+            } else {
+                None
+            });
+
+        let effect_dmg = if let Some((element, effect)) = &weapon_info {
+            self.apply_weapon_effect_inner(player, enemy_index, element, effect, base_damage, mult)
+        } else {
+            0
+        };
+
         self.player_elemental_cooldown = ELEMENTAL_COOLDOWN;
-        (dealt, burst)
+        (dealt, burst, effect_dmg)
     }
 
     /// Attaque normale d'un ennemi sur le joueur.

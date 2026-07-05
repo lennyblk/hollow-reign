@@ -63,6 +63,7 @@ impl Element {
     }
 }
 
+#[derive(Clone)]
 pub enum WeaponEffect {
     /// Applique la stack élémentaire de l'arme à TOUS les ennemis.
     AoeElemental,
@@ -112,6 +113,7 @@ pub struct ShieldData {
     pub ascii: &'static str,
 }
 
+#[derive(Clone, Copy)]
 pub enum ConsumableEffect {
     CurePoison,
     CureBleed,
