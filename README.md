@@ -104,17 +104,26 @@ Four NPCs are spread across the zones. Each one offers a quest with a reward.
 ### Navigation
 | Key | Action |
 |---|---|
-| 1 2 3 | Move between locations |
-| Enter | Confirm / Interact |
-| I | Open inventory |
-| Escape | Back / Cancel |
+| A Z E | Move between locations |
+| R | Rest at Grace Point |
+| T | Talk to NPC |
+| F | Fight enemies |
+| G | Merchant |
+| C | Open chest |
+| Q | Open inventory |
+| H | Drink Estus |
+| S | Save |
+| Escape | Quit |
 
 ### Combat
 | Key | Action |
 |---|---|
-| 1 / 2 / 3 | Choose an action |
-| Letters | Type the typing challenge |
-| Escape | Flee the fight |
+| A | Normal attack |
+| S | Special attack (elemental) |
+| F | Flee |
+| I | Open inventory |
+| H | Drink Estus |
+| Letters | Type the challenge / press the parry key |
 
 ### Menus
 | Key | Action |
