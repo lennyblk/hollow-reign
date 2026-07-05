@@ -105,31 +105,36 @@ pub fn run_navigation(world: &World, state: &mut NavigationState, player: &mut P
             .filter(|id| !state.opened_chests.contains(id));
 
         if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
-            match code {
-                // Navigation par numéro
-                KeyCode::Char(c) if c.is_ascii_digit() => {
-                    let idx = (c as usize).saturating_sub('1' as usize);
-                    let conns = &location.connections;
-                    if idx < num_connections {
-                        match conns[idx].target {
-                            LocationTarget::Here(id) => {
-                                state.navigate_here(id);
-                            }
-                            LocationTarget::OtherZone(zid) => {
-                                if zid == ZoneId::TheVoid
-                                    && !state.killed_bosses.contains(&state.zone)
-                                {
-                                    flash = Some(
-                                        "Vaincre le boss de cette zone pour acceder au Vide."
-                                            .to_string(),
-                                    );
-                                } else {
-                                    state.navigate_zone(world, zid);
-                                }
+            // Navigation : q/w/e pour connexions 1/2/3
+            let nav_idx = match code {
+                KeyCode::Char('a') | KeyCode::Char('A') => Some(0),
+                KeyCode::Char('z') | KeyCode::Char('Z') => Some(1),
+                KeyCode::Char('e') | KeyCode::Char('E') => Some(2),
+                _ => None,
+            };
+            if let Some(idx) = nav_idx {
+                let conns = &location.connections;
+                if idx < num_connections {
+                    match conns[idx].target {
+                        LocationTarget::Here(id) => {
+                            state.navigate_here(id);
+                        }
+                        LocationTarget::OtherZone(zid) => {
+                            if zid == ZoneId::TheVoid
+                                && !state.killed_bosses.contains(&state.zone)
+                            {
+                                flash = Some(
+                                    "Vaincre le boss de cette zone pour acceder au Vide."
+                                        .to_string(),
+                                );
+                            } else {
+                                state.navigate_zone(world, zid);
                             }
                         }
                     }
                 }
+            } else {
+            match code {
                 // Reposer à la grâce
                 KeyCode::Char('r') | KeyCode::Char('R') if has_grace => {
                     let grace_id = location.contents.grace.as_ref().unwrap().id;
@@ -147,15 +152,15 @@ pub fn run_navigation(world: &World, state: &mut NavigationState, player: &mut P
                     break NavigationEvent::TalkToNpc(npc);
                 }
                 // Combat
-                KeyCode::Char('e') | KeyCode::Char('E') if has_enemies => {
+                KeyCode::Char('f') | KeyCode::Char('F') if has_enemies => {
                     break NavigationEvent::EnterCombat;
                 }
                 // Marchand
-                KeyCode::Char('m') | KeyCode::Char('M') if has_merchant => {
+                KeyCode::Char('g') | KeyCode::Char('G') if has_merchant => {
                     break NavigationEvent::OpenMerchant(state.zone);
                 }
                 // Inventaire (toujours disponible)
-                KeyCode::Char('i') | KeyCode::Char('I') => {
+                KeyCode::Char('q') | KeyCode::Char('Q') => {
                     break NavigationEvent::OpenInventory;
                 }
                 // Sauvegarde manuelle
@@ -171,10 +176,11 @@ pub fn run_navigation(world: &World, state: &mut NavigationState, player: &mut P
                     ));
                 }
                 // Quitter
-                KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
+                KeyCode::Esc => {
                     break NavigationEvent::Quit;
                 }
                 _ => {}
+            }
             }
         }
     };
@@ -357,7 +363,7 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, player: &P
             execute!(
                 out,
                 SetForegroundColor(Color::DarkGrey),
-                Print(format!("  [{}] {} ", i + 1, conn.label)),
+                Print(format!("  [{}] {} ", ["A","Z","E"].get(i).unwrap_or(&"?"), conn.label)),
                 Print(format!("({}) [VERROU - vaincre le boss]\r\n", dest_name)),
                 ResetColor,
             ).ok();
@@ -368,7 +374,7 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, player: &P
                 Print("  "),
                 SetForegroundColor(Color::DarkYellow),
                 SetAttribute(Attribute::Bold),
-                Print(format!("[{}]", i + 1)),
+                Print(format!("[{}]", ["A","Z","E"].get(i).unwrap_or(&"?"))),
                 ResetColor,
                 Print(format!(" {}", conn.label)),
                 SetForegroundColor(Color::DarkGrey),
@@ -399,24 +405,24 @@ fn draw(out: &mut io::Stdout, world: &World, state: &NavigationState, player: &P
         actions.push(("T", "Parler"));
     }
     if location.contents.merchant {
-        actions.push(("M", "Marchand"));
+        actions.push(("G", "Marchand"));
     }
     let zone_boss_dead_actions = state.killed_bosses.contains(&state.zone);
     let has_live_enemies = location.contents.enemies.iter().any(|s| {
         s.enemy_type != EnemyType::Boss || !zone_boss_dead_actions
     });
     if has_live_enemies {
-        actions.push(("E", "Combattre"));
+        actions.push(("F", "Combattre"));
     }
     if has_chest {
         actions.push(("C", "Coffre"));
     }
-    actions.push(("I", "Inventaire"));
+    actions.push(("Q", "Inventaire"));
     if player.estus_charges > 0 {
         actions.push(("H", "Estus"));
     }
     actions.push(("S", "Sauvegarder"));
-    actions.push(("Q", "Quitter"));
+    actions.push(("Esc", "Quitter"));
 
     for (key, label) in &actions {
         execute!(
