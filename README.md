@@ -20,6 +20,8 @@ The game runs in a terminal and uses the keyboard to navigate, fight and talk to
 - Background music on the title screen
 - Unique ASCII art for every enemy and NPC
 
+<img src="docs/screenshots/inventory.png" width="900" alt="Inventory screen with item detail panel" />
+
 ---
 
 ## Zones
@@ -43,6 +45,8 @@ Zones 1 and 2 (Ashfeld and Gravemoor) can spawn up to three enemies at once. Fro
 
 At the start of a new game you choose one of three classes. Each class has different base stats that affect your HP, damage output and scaling.
 
+<img src="docs/screenshots/class-select.png" width="900" alt="Class selection screen showing Knight, Mage and Rogue side by side" />
+
 **Knight**
 - Balanced stats with high Vigor and Strength
 - Vigor 14 / Strength 14 / Dexterity 13 / Intelligence 9 / Mind 9 / Faith 9 / Arcane 7
@@ -62,13 +66,26 @@ At the start of a new game you choose one of three classes. Each class has diffe
 
 ## Combat System
 
-Combat is turn-based. Each turn you choose one action:
+Combat is turn-based and always 1v1. Each turn you choose one action:
 
-- **Attack**: a typing challenge appears (a sequence of letters to type). Speed and accuracy determine damage output. A perfect run multiplies damage.
-- **Use item**: use a consumable (heal, antidote, etc.) or trigger a weapon ability.
+<img src="docs/screenshots/combat.png" width="900" alt="1v1 combat screen with HP bars, element badges and action keycaps" />
+
+- **Attack**: a normal hit using your weapon's base damage.
+- **Special**: an elemental attack tied to your weapon, available once its cooldown expires. It applies your weapon's element to the enemy and can trigger its unique ability (lifesteal, armor break, execute, stun, and more depending on the weapon).
+- **Estus**: drink a healing flask (limited charges, refilled at Grace Points).
+- **Inventory**: use a consumable or check your gear mid-fight without ending your turn.
 - **Flee**: attempt to escape the fight (not always possible).
 
-Enemies have associated elements (Fire, Ice, Poison, Rot, Bleed, Lightning). Some elements apply status effects over time.
+Most attacks (yours and the enemy's) trigger a random mini-game instead of an automatic damage roll:
+
+- **Typing**: type a phrase before the timer runs out.
+- **Parry**: hit the key as a cursor sweeps across a timing bar.
+- **Combo**: reproduce a short sequence of arrow keys and letters in order.
+- **Dodge**: an enemy telegraphs a direction after a random wind-up, then you have a short window to press it.
+
+Each mini-game rewards Perfect / Good / Miss, boosting your damage (and reducing damage taken) the better you perform. Difficulty and reaction windows scale with the enemy's rank: regular mobs are the most forgiving, bosses demand near-perfect execution.
+
+Enemies carry one or two elements (Fire, Ice, Lightning, Bleed, Poison, Rot) in a rock-paper-scissors-style cycle, and apply stacking status effects over time (poison, bleed, rot, fire, freeze, electrocute). Enemy attack power scales with how far into the game a zone is, so the same enemy type hits noticeably harder in later zones.
 
 Bosses are unique fights with no enemy respawn.
 
